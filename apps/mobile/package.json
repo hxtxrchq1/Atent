@@ -6,7 +6,7 @@
   "description": "Atent Mobile Application (React Native + TypeScript + Kotlin)",
   "scripts": {
     "build": "tsc -b",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node --test dist/*.test.js"
   },
   "dependencies": {
     "@atent/shared": "*",
