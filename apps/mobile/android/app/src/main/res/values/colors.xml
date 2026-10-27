@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="atent_black">#09080D</color>
+    <color name="atent_surface">#151219</color>
+    <color name="atent_pink">#F52D83</color>
+    <color name="atent_pink_luminous">#FF83B9</color>
+    <color name="atent_red">#FF304F</color>
+</resources>

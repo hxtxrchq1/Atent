@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atent — Sistema de Diseño y Flujos de Seguridad</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea {
+      user-select: auto;
+      -webkit-user-select: auto;
+    }
+    body {
+      background-color: #09080D;
+      color: #F8F5F8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      touch-action: pan-y;
+    }
+    @keyframes floatCharacter {
+      0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-6px) rotate(1.2deg);
+      }
+    }
+    @keyframes floatSpeechBubble {
+      0%, 100% {
+        transform: translateY(0px) scale(1);
+      }
+      50% {
+        transform: translateY(-4px) scale(1.02);
+      }
+    }
+    .atent-floating-character {
+      animation: floatCharacter 4s ease-in-out infinite;
+    }
+    .atent-floating-bubble {
+      animation: floatSpeechBubble 3.2s ease-in-out infinite;
+    }
+  </style>
+  <!-- MapLibre GL + OpenStreetMap: mapa libre sin API key -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.7.0/dist/maplibre-gl.css" crossorigin="anonymous" />
+  <script src="https://unpkg.com/maplibre-gl@5.7.0/dist/maplibre-gl.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

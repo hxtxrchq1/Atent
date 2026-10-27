@@ -1,0 +1,26 @@
+{
+  "name": "atent-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Atent — Personal Safety & Emergency Assistance Monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:packages && npm run build:apps",
+    "build:packages": "npm run build --workspace=@atent/types && npm run build --workspace=@atent/validation && npm run build --workspace=@atent/config && npm run build --workspace=@atent/shared",
+    "build:apps": "npm run build --workspace=@atent/api && npm run build --workspace=@atent/mobile && npm run build --workspace=@atent/safety-web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

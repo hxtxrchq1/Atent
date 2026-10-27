@@ -1,0 +1,17 @@
+{
+  "name": "@atent/mobile",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Atent Mobile Application (React Native + TypeScript + Kotlin)",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@atent/shared": "*",
+    "@atent/types": "*",
+    "@atent/validation": "*",
+    "@atent/config": "*"
+  }
+}

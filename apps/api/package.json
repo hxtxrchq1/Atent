@@ -1,0 +1,19 @@
+{
+  "name": "@atent/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Atent Backend API (NestJS + TypeScript)",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/main.js",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@atent/config": "*",
+    "@atent/shared": "*",
+    "@atent/types": "*",
+    "@atent/validation": "*",
+    "firebase-admin": "^13.5.0"
+  }
+}

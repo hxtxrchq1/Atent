@@ -1,0 +1,35 @@
+name: Atent Monorepo CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  validate:
+    name: Build, Lint and Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Compile and Build All Packages
+        run: npm run build
+
+      - name: Execute Full Test Suite
+        env:
+          NODE_ENV: test
+          # CI no depende de una base PostgreSQL externa; las pruebas de
+          # integración detectan la indisponibilidad y se omiten de forma segura.
+          DATABASE_URL: postgresql://127.0.0.1:1/atent_ci
+        run: npm test

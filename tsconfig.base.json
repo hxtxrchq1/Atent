@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@atent/types": ["packages/types/dist/index.d.ts"],
+      "@atent/types/*": ["packages/types/dist/*"],
+      "@atent/validation": ["packages/validation/dist/index.d.ts"],
+      "@atent/validation/*": ["packages/validation/dist/*"],
+      "@atent/config": ["packages/config/dist/index.d.ts"],
+      "@atent/config/*": ["packages/config/dist/*"],
+      "@atent/shared": ["packages/shared/dist/index.d.ts"],
+      "@atent/shared/*": ["packages/shared/dist/*"]
+    }
+  }
+}
