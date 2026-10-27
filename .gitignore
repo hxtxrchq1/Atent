@@ -59,3 +59,4 @@ apps/mobile/android/.idea/
 AGENTS.md
 
 .secrets/
+*.tsbuildinfo

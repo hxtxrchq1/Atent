@@ -20,6 +20,11 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Clean generated TypeScript state
+        run: |
+          find . -name 'tsconfig.tsbuildinfo' -delete
+          find . -type d \( -name dist -o -name build \) -prune -exec rm -rf {} +
+
       - name: Install Dependencies
         run: npm ci
 
