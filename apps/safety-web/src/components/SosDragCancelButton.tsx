@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { VectorIcon } from './AppCommon';
 
 export type GestureMachineState =
@@ -32,6 +32,17 @@ export function SosDragCancelButton({
   const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const activePointerId = useRef<number | null>(null);
   const pressStartTime = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isSosActive && gestureState !== 'IDLE') {
+      setDragOffset({ x: 0, y: 0 });
+      setIsOverTarget(false);
+      setIsProcessing(false);
+      activePointerId.current = null;
+      setGestureState('IDLE');
+      onGestureStateChange?.('IDLE');
+    }
+  }, [isSosActive, gestureState, onGestureStateChange]);
 
   const updateState = (newState: GestureMachineState) => {
     setGestureState(newState);
@@ -113,8 +124,11 @@ export function SosDragCancelButton({
       if (isSosActive) {
         // Si ya había una alerta activa, cancelarla en Supabase
         setIsProcessing(true);
-        await onCancelActiveEmergency();
+        const cancelled = await onCancelActiveEmergency();
         setIsProcessing(false);
+        updateState('IDLE');
+        if (!cancelled) return;
+        return;
       }
       // Si aún no estaba activa, se descartó el intento sin crear ni emitir ninguna alerta
       setTimeout(() => updateState('IDLE'), 350);

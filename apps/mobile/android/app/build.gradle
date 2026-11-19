@@ -1,6 +1,10 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
-apply plugin: "com.google.gms.google-services"
+// The Firebase config is intentionally not committed. Enable FCM resources
+// only in environments that provide the private google-services.json file.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
 
 android {
     namespace "pe.atent.app"

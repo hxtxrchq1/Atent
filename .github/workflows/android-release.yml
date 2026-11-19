@@ -1,0 +1,60 @@
+name: Atent Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/android/**'
+      - 'apps/safety-web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  build-apk:
+    name: Build and publish Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build shared packages
+        run: npm run build:packages
+
+      - name: Build web application
+        run: npm run build --workspace=@atent/safety-web
+
+      - name: Package web application into Android assets
+        run: |
+          rm -rf apps/mobile/android/app/src/main/assets/www
+          mkdir -p apps/mobile/android/app/src/main/assets/www
+          cp -R apps/safety-web/dist/. apps/mobile/android/app/src/main/assets/www/
+          mkdir -p apps/mobile/android/app/src/main/assets/www/assets/character
+          cp apps/safety-web/public/assets/character/* apps/mobile/android/app/src/main/assets/www/assets/character/
+
+      - name: Build debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atent-android-debug-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

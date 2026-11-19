@@ -66,6 +66,7 @@ export function DesignShowcaseApp() {
   const [isPressingSos, setIsPressingSos] = useState(false);
   const [activeEmergencyAlertId, setActiveEmergencyAlertId] = useState<string | null>(null);
   const activeEmergencyAlertIdRef = useRef<string | null>(null);
+  const emergencyTransitionRef = useRef(false);
   const currentUserRef = useRef<any>(null);
 
   // RED DE CONTACTOS Y SOLICITUDES MUTUAS (Requisito 7)
@@ -370,6 +371,34 @@ export function DesignShowcaseApp() {
     };
   }, [currentUser?.id]);
 
+  // Recover the owner's active alert from the server after a WebView restart.
+  // localStorage alone can outlive a resolved alert and leave the SOS stuck.
+  const recoverOwnerEmergency = async (expectedUserId = currentUserRef.current?.id) => {
+    if (!currentUserRef.current?.id) return;
+    const userId = expectedUserId;
+    if (currentUserRef.current.id !== userId) return;
+    const { data, error } = await supabase
+      .from('emergency_alerts')
+      .select('id')
+      .eq('owner_user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || currentUserRef.current?.id !== userId) return;
+    const alertId = data?.id ?? null;
+    setActiveEmergencyAlertId(alertId);
+    activeEmergencyAlertIdRef.current = alertId;
+    setIsSosActive(Boolean(alertId));
+    if (alertId) localStorage.setItem(STORAGE_KEY_SOS_ACTIVE, 'true');
+    else localStorage.removeItem(STORAGE_KEY_SOS_ACTIVE);
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    void recoverOwnerEmergency(currentUser.id);
+  }, [currentUser?.id]);
+
   // Escuchadores de Android Bridge
   useEffect(() => {
     refreshBattery();
@@ -431,6 +460,7 @@ export function DesignShowcaseApp() {
       // Al volver a la app desde los ajustes de Android, comprobar nuevamente ubicación
       requestDeviceLocation();
       refreshBattery();
+      void recoverOwnerEmergency();
       if (currentUser?.id) {
         loadContactsAndRequests();
       }
@@ -591,7 +621,8 @@ export function DesignShowcaseApp() {
   // REQUISITO 1: MÁQUINA DE ESTADOS SOS Y ACTIVACIÓN TRAS GESTO RESUELTO
   // ==========================================
   const handleEmergencyTriggered = async () => {
-    if (isSosActive) return;
+    if (isSosActive || emergencyTransitionRef.current) return;
+    emergencyTransitionRef.current = true;
 
     // 1. Activar en la interfaz
     setIsSosActive(true);
@@ -606,7 +637,7 @@ export function DesignShowcaseApp() {
     // 3. Registrar alerta en Supabase con coordenadas reales actuales
     if (currentUser?.id) {
       try {
-        const { data: newAlert } = await supabase
+        const { data: newAlert, error } = await supabase
           .from('emergency_alerts')
           .insert([
             {
@@ -625,6 +656,8 @@ export function DesignShowcaseApp() {
           ])
           .select()
           .maybeSingle();
+
+        if (error) throw error;
 
         if (newAlert?.id) {
           setActiveEmergencyAlertId(newAlert.id);
@@ -650,24 +683,32 @@ export function DesignShowcaseApp() {
     } else {
       showToast(`Alerta de auxilio compartida con tus ${contacts.length} contacto(s)`);
     }
+    emergencyTransitionRef.current = false;
   };
 
   // CANCELACIÓN DE LA EMERGENCIA: Arrastre al círculo con sincronización real en servidor
   const handlePerformCancelEmergency = async (): Promise<boolean> => {
+    if (emergencyTransitionRef.current) return false;
+    emergencyTransitionRef.current = true;
     // 1. Intentar actualizar en Supabase si el usuario está online
     if (currentUser?.id) {
       try {
-        const { error } = await supabase
+        let query = supabase
           .from('emergency_alerts')
           .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
           .eq('owner_user_id', currentUser.id)
           .eq('status', 'active');
+        const alertId = activeEmergencyAlertIdRef.current;
+        if (alertId) query = query.eq('id', alertId);
+        const { error } = await query;
 
         if (error) {
+          emergencyTransitionRef.current = false;
           showToast(`Error al sincronizar con el servidor: ${error.message}`);
           return false; // No simular éxito si el servidor rechaza o falla
         }
       } catch (err: any) {
+        emergencyTransitionRef.current = false;
         showToast(`Fallo de conexión: ${err.message || 'No se pudo cancelar en la nube'}`);
         return false; // Mantener alerta activa
       }
@@ -679,6 +720,10 @@ export function DesignShowcaseApp() {
     // 3. Actualizar estado local sólo tras éxito o modo offline verificado
     setIsSosActive(false);
     localStorage.removeItem(STORAGE_KEY_SOS_ACTIVE);
+    setActiveEmergencyAlertId(null);
+    activeEmergencyAlertIdRef.current = null;
+    setCurrentScreen('home');
+    setActiveTab('home');
     setCharacterMood('TRANQUILO');
     setCharacterSpeech('Alerta cancelada');
 
@@ -687,6 +732,8 @@ export function DesignShowcaseApp() {
       setCharacterMood(currentUser?.avatar_url || 'FELIZ');
       setCharacterSpeech('Estoy aquí para acompañarte');
     }, 3500);
+
+    emergencyTransitionRef.current = false;
 
     return true;
   };
