@@ -8,6 +8,7 @@ interface SettingsScreenProps {
   onOpenTutorial: () => void;
   onCheckForUpdates: () => void;
   updateVersion: string | null;
+  isCheckingUpdates: boolean;
   onLogout: () => void;
   onUpdateDisplayName: (newName: string) => void;
   showToast: (msg: string) => void;
@@ -19,6 +20,7 @@ export function SettingsScreen({
   onOpenTutorial,
   onCheckForUpdates,
   updateVersion,
+  isCheckingUpdates,
   onLogout,
   onUpdateDisplayName,
   showToast,
@@ -227,9 +229,10 @@ export function SettingsScreen({
         <button
           type="button"
           onClick={onCheckForUpdates}
-          style={{ width: '100%', padding: '12px 14px', marginBottom: '10px', backgroundColor: updateVersion ? '#2A1820' : '#151219', color: updateVersion ? '#FF83B9' : '#F8F5F8', border: `1px solid ${updateVersion ? '#FF304F' : '#382F45'}`, borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+          disabled={isCheckingUpdates}
+          style={{ width: '100%', padding: '12px 14px', marginBottom: '10px', backgroundColor: updateVersion ? '#2A1820' : '#151219', color: updateVersion ? '#FF83B9' : '#F8F5F8', border: `1px solid ${updateVersion ? '#FF304F' : '#382F45'}`, borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: isCheckingUpdates ? 'wait' : 'pointer', opacity: isCheckingUpdates ? 0.7 : 1 }}
         >
-          {updateVersion ? `Actualizar a Atent ${updateVersion}` : 'Buscar actualizaciones'}
+          {isCheckingUpdates ? 'Buscando actualizaciones…' : updateVersion ? `Buscar / actualizar a Atent ${updateVersion}` : 'Buscar actualizaciones'}
         </button>
 
         {window.AndroidBridge?.openAppSettings && (

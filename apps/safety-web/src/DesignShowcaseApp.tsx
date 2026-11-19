@@ -134,26 +134,38 @@ export function DesignShowcaseApp() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const updateCheckInFlightRef = useRef(false);
+  const lastNotifiedUpdateVersionRef = useRef<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const checkAppUpdate = async (openModal = true) => {
+  const checkAppUpdate = async (mode: 'background' | 'manual' = 'background') => {
+    if (updateCheckInFlightRef.current) return;
+    updateCheckInFlightRef.current = true;
+    setIsCheckingUpdates(true);
     try {
       const update = await checkForLatestUpdate();
       setAvailableUpdate(update);
-      if (update && openModal) setShowUpdateModal(true);
-      if (!update && openModal) showToast('Ya tienes la versión más reciente de Atent.');
+      if (update && (mode === 'manual' || lastNotifiedUpdateVersionRef.current !== update.version)) {
+        lastNotifiedUpdateVersionRef.current = update.version;
+        setShowUpdateModal(true);
+      }
+      if (!update && mode === 'manual') showToast('Ya tienes la versión más reciente de Atent.');
     } catch {
-      if (openModal) showToast('No se pudo comprobar actualizaciones. Inténtalo más tarde.');
+      if (mode === 'manual') showToast('No se pudo comprobar actualizaciones. Inténtalo más tarde.');
+    } finally {
+      updateCheckInFlightRef.current = false;
+      setIsCheckingUpdates(false);
     }
   };
 
   useEffect(() => {
-    void checkAppUpdate(false);
-    const interval = window.setInterval(() => { void checkAppUpdate(false); }, 6 * 60 * 60 * 1000);
+    void checkAppUpdate('background');
+    const interval = window.setInterval(() => { void checkAppUpdate('background'); }, 6 * 60 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -1297,11 +1309,9 @@ export function DesignShowcaseApp() {
               currentUser={currentUser}
               onOpenAvatarSetup={() => setCurrentScreen('avatar_setup')}
               onOpenTutorial={() => setShowTutorial(true)}
-              onCheckForUpdates={() => {
-                if (availableUpdate) setShowUpdateModal(true);
-                else void checkAppUpdate(true);
-              }}
+              onCheckForUpdates={() => { void checkAppUpdate('manual'); }}
               updateVersion={availableUpdate?.version ?? null}
+              isCheckingUpdates={isCheckingUpdates}
               onLogout={handleLogout}
               onUpdateDisplayName={(newName) => {
                 const updated = { ...currentUser, display_name: newName };
@@ -1378,7 +1388,7 @@ export function DesignShowcaseApp() {
             <div style={{ width: '100%', maxWidth: '380px', backgroundColor: '#1E1925', border: '1px solid #FF83B9', borderRadius: '22px', padding: '22px', boxShadow: '0 18px 50px rgba(0,0,0,.45)' }}>
               <div style={{ color: '#FF83B9', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>NUEVA VERSIÓN</div>
               <h3 id="atent-update-title" style={{ margin: '6px 0 8px', fontSize: 21 }}>{availableUpdate.title}</h3>
-              <p style={{ color: '#AAA4B0', fontSize: 13, lineHeight: 1.45, margin: '0 0 16px' }}>Ya puedes actualizar Atent a la versión {availableUpdate.version}. La descarga se realizará desde el servidor de Atent y Android te pedirá confirmar la instalación.</p>
+              <p style={{ color: '#AAA4B0', fontSize: 13, lineHeight: 1.45, margin: '0 0 16px' }}>Ya puedes actualizar Atent a la versión {availableUpdate.version}. La descarga se realizará desde GitHub y Android te pedirá confirmar la instalación.</p>
               {availableUpdate.notes && <p style={{ color: '#DDD6E3', fontSize: 12, lineHeight: 1.4, margin: '0 0 18px', whiteSpace: 'pre-line' }}>{availableUpdate.notes.slice(0, 500)}</p>}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" onClick={() => setShowUpdateModal(false)} style={{ flex: 1, padding: 12, backgroundColor: '#151219', color: '#AAA4B0', border: '1px solid #2B2436', borderRadius: 11, fontWeight: 700, cursor: 'pointer' }}>Más tarde</button>

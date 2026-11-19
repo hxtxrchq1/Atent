@@ -8,6 +8,7 @@ on:
       - 'apps/mobile/android/**'
       - 'apps/safety-web/**'
       - 'packages/**'
+      - '.github/workflows/android-release.yml'
       - 'package.json'
       - 'package-lock.json'
 
@@ -55,6 +56,6 @@ jobs:
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: atent-android-debug-apk
+          name: atent-android-v1.9.1-debug-apk
           path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
