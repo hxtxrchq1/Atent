@@ -7,6 +7,7 @@ export interface EmergencyAlertItem {
   owner_user_id: string;
   owner_name: string;
   owner_avatar: string;
+  recipient_user_id?: string | null;
   status: 'active' | 'resolved' | 'cancelled';
   created_at: string;
   last_latitude?: number;
@@ -125,7 +126,7 @@ export function AlertsPanel({ alerts, onSelectAlert, onRefresh, isRefreshing = f
                       {alert.owner_name}
                     </div>
                     <div style={{ fontSize: '11px', color: '#FF83B9', marginTop: '2px', fontWeight: 600 }}>
-                      ¡Solicitud de auxilio activa!
+                      {alert.recipient_user_id ? 'Notificación individual' : '¡Solicitud de auxilio activa!'}
                     </div>
                   </div>
                 </div>
@@ -141,7 +142,7 @@ export function AlertsPanel({ alerts, onSelectAlert, onRefresh, isRefreshing = f
                     letterSpacing: '0.5px',
                   }}
                 >
-                  SOS
+                  {alert.recipient_user_id ? 'DIRECTA' : 'SOS'}
                 </span>
               </div>
 
@@ -221,7 +222,7 @@ export function AlertDetailModal({ alert, onClose }: AlertDetailModalProps) {
               }}
             />
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#F8F5F8' }}>
-              Emergencia de {alert.owner_name}
+              {alert.recipient_user_id ? 'Notificación individual de ' : 'Emergencia de '}{alert.owner_name}
             </h3>
           </div>
           <button

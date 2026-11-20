@@ -30,6 +30,7 @@ class TrustedAlertPollingService : Service() {
         private const val PREFS = "trusted_alert_receiver"
         private const val USER_ID = "user_id"
         private const val LAST_ALERT = "last_alert_id"
+        private const val HANDLED_ALERTS = "handled_alert_ids"
         private const val SUPABASE_URL = "https://ngsexidmirortoccbatd.supabase.co"
         private const val SUPABASE_KEY = "sb_publishable_vL9-w52Kq3HOukXhcbIC_Q_xdWzRCqX"
 
@@ -102,19 +103,29 @@ class TrustedAlertPollingService : Service() {
             if (connection.responseCode !in 200..299) return
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val alerts = JSONArray(body)
-            val lastId = getSharedPreferences(PREFS, MODE_PRIVATE).getString(LAST_ALERT, null)
+            val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+            val handled = (prefs.getStringSet(HANDLED_ALERTS, emptySet()) ?: emptySet()).toMutableSet()
+            prefs.getString(LAST_ALERT, null)?.let { handled.add(it) } // migrates legacy single-id dedupe
             for (index in 0 until alerts.length()) {
                 val alert = alerts.getJSONObject(index)
                 if (alert.optString("status") != "active") continue
                 val id = alert.optString("id")
-                if (id.isBlank() || id == lastId) continue
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(LAST_ALERT, id).apply()
+                if (id.isBlank() || id in handled) continue
+                handled.add(id)
+                while (handled.size > 100) handled.remove(handled.first())
+                prefs.edit().putStringSet(HANDLED_ALERTS, handled).putString(LAST_ALERT, id).apply()
                 val owner = alert.optString("owner_name", "Tu contacto de confianza")
-                val alertIntent = Intent(this, IncomingEmergencyAlertService::class.java).apply {
-                    action = IncomingEmergencyAlertService.ACTION_START
-                    putExtra("ownerName", owner)
+                val recipientUserId = alert.optString("recipient_user_id")
+                if (recipientUserId.isNotBlank() && recipientUserId == userId) {
+                    DirectTrustedAlertNotification.show(this, owner, id)
+                } else {
+                    val alertIntent = Intent(this, IncomingEmergencyAlertService::class.java).apply {
+                        action = IncomingEmergencyAlertService.ACTION_START
+                        putExtra("ownerName", owner)
+                        putExtra("alertType", "SOS")
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(alertIntent) else startService(alertIntent)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(alertIntent) else startService(alertIntent)
                 break
             }
         } catch (_: Exception) {

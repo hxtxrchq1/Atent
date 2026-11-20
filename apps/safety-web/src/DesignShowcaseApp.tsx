@@ -309,6 +309,7 @@ export function DesignShowcaseApp() {
     const nextAlerts = data.map((alert: any) => ({
       id: alert.id,
       owner_user_id: alert.owner_user_id,
+      recipient_user_id: alert.recipient_user_id ?? null,
       owner_name: alert.owner_name || 'Contacto de auxilio',
       owner_avatar: alert.owner_avatar || 'FELIZ',
       status: alert.status,

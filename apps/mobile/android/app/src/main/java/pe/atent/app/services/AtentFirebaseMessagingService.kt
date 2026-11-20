@@ -15,11 +15,17 @@ class AtentFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         val ownerName = data["ownerName"] ?: message.notification?.title ?: "Tu contacto de confianza"
+        val alertType = data["alertType"] ?: "SOS"
+        val alertId = data["alertId"] ?: ""
+        if (alertType == "DIRECT") {
+            DirectTrustedAlertNotification.show(this, ownerName, alertId)
+            return
+        }
         val alertIntent = Intent(this, IncomingEmergencyAlertService::class.java).apply {
             action = IncomingEmergencyAlertService.ACTION_START
             putExtra("ownerName", ownerName)
-            putExtra("alertId", data["alertId"])
-            putExtra("alertType", data["alertType"] ?: "SOS")
+            putExtra("alertId", alertId)
+            putExtra("alertType", "SOS")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(alertIntent) else startService(alertIntent)
     }
