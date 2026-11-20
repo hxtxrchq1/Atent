@@ -768,7 +768,10 @@ export function DesignShowcaseApp() {
       if (!data) throw new Error('No se recibió confirmación de la alerta.');
       return { success: true, message: `Alerta individual enviada a ${contact.display_name}.` };
     } catch (error: any) {
-      return { success: false, message: error?.message || 'No se pudo enviar la alerta individual.' };
+      const code = String(error?.message || '');
+      if (code.includes('DIRECT_ALERT_RATE_LIMIT')) return { success: false, message: 'Espera un minuto antes de volver a notificar a esta persona.' };
+      if (code.includes('DIRECT_ALERT_REQUIRES_MUTUAL_TRUST')) return { success: false, message: 'Solo puedes notificar contactos confirmados de tu red.' };
+      return { success: false, message: 'No se pudo enviar la alerta individual. Comprueba tu conexión e inténtalo de nuevo.' };
     }
   };
 
