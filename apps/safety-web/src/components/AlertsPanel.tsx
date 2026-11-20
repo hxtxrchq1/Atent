@@ -162,7 +162,7 @@ export function AlertsPanel({ alerts, onSelectAlert, onRefresh, isRefreshing = f
                 {alert.last_battery_level !== undefined && (
                   <span>Batería: {alert.last_battery_level}%</span>
                 )}
-                <span style={{ color: '#FF83B9', fontWeight: 700 }}>Ver mapa &rarr;</span>
+                <span style={{ color: '#FF83B9', fontWeight: 700 }}>{alert.recipient_user_id ? 'Ver alerta' : 'Ver mapa'} &rarr;</span>
               </div>
             </div>
           ))}
