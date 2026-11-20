@@ -2,7 +2,7 @@
 -- pg_net queues HTTP requests asynchronously. Store the Supabase service-role JWT
 -- in Vault (not in this repository) using the name documented in RELEASE_NOTES_1.9.3.
 
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA net;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
 CREATE OR REPLACE FUNCTION public.dispatch_atent_emergency_push()
 RETURNS trigger
@@ -29,7 +29,7 @@ BEGIN
   END IF;
 
   PERFORM net.http_post(
-    url := 'https://gxkpiqmuhvpsbmooieod.supabase.co/functions/v1/send-emergency-push',
+    url := 'https://ngsexidmirortoccbatd.supabase.co/functions/v1/send-emergency-push',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || v_bearer
