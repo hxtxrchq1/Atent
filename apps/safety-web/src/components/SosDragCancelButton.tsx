@@ -32,9 +32,12 @@ export function SosDragCancelButton({
   const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const activePointerId = useRef<number | null>(null);
   const pressStartTime = useRef<number>(0);
+  const wasSosActive = useRef(isSosActive);
 
   useEffect(() => {
-    if (!isSosActive && gestureState !== 'IDLE') {
+    const justResolved = wasSosActive.current && !isSosActive;
+    wasSosActive.current = isSosActive;
+    if (justResolved && gestureState !== 'IDLE') {
       setDragOffset({ x: 0, y: 0 });
       setIsOverTarget(false);
       setIsProcessing(false);
@@ -52,10 +55,11 @@ export function SosDragCancelButton({
   // 1. INICIO DEL GESTO: Con una sola pulsación y mantener, arranca el gesto inmediatamente
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isProcessing) return;
+    e.preventDefault();
 
     // Capturar puntero de inmediato en Android / navegador táctil
     try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      e.currentTarget.setPointerCapture(e.pointerId);
       activePointerId.current = e.pointerId;
     } catch {
       // ignore
@@ -103,7 +107,7 @@ export function SosDragCancelButton({
     if (activePointerId.current !== e.pointerId) return;
 
     try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
       // ignore
     }
@@ -163,7 +167,7 @@ export function SosDragCancelButton({
   const handlePointerCancel = (e: React.PointerEvent) => {
     try {
       if (activePointerId.current !== null) {
-        (e.target as HTMLElement).releasePointerCapture(activePointerId.current);
+        e.currentTarget.releasePointerCapture(activePointerId.current);
       }
     } catch {
       // ignore

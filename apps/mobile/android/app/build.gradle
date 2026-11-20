@@ -16,8 +16,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Nombre público de la primera versión; el código interno permite
         // actualizar instalaciones beta anteriores sin downgrade de Android.
-        versionCode 7
-        versionName "1.9.1"
+        versionCode 8
+        versionName "1.9.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
