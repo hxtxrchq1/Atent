@@ -30,8 +30,8 @@ class TrustedAlertPollingService : Service() {
         private const val PREFS = "trusted_alert_receiver"
         private const val USER_ID = "user_id"
         private const val LAST_ALERT = "last_alert_id"
-        private const val SUPABASE_URL = "https://gxkpiqmuhvpsbmooieod.supabase.co"
-        private const val SUPABASE_KEY = "sb_publishable_3CR_6m7aMGMjDWH_6C_o8g_kOCqNAxv"
+        private const val SUPABASE_URL = "https://ngsexidmirortoccbatd.supabase.co"
+        private const val SUPABASE_KEY = "sb_publishable_vL9-w52Kq3HOukXhcbIC_Q_xdWzRCqX"
 
         fun registerPushToken(context: Context, token: String) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
