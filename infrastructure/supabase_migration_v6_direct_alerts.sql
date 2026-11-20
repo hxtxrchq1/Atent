@@ -11,15 +11,20 @@ RETURNS TABLE (
   created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
   last_latitude DOUBLE PRECISION, last_longitude DOUBLE PRECISION,
   last_accuracy DOUBLE PRECISION, last_battery_level INT,
-  last_battery_charging BOOLEAN, is_in_vehicle BOOLEAN
+  last_battery_charging BOOLEAN, is_in_vehicle BOOLEAN, last_recorded_at TIMESTAMPTZ
 )
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   SELECT a.id, a.owner_user_id, p.display_name, p.avatar_url, a.status,
          a.created_at, a.updated_at, a.last_latitude, a.last_longitude,
          a.last_accuracy, a.last_battery_level, a.last_battery_charging,
-         a.is_in_vehicle
+         a.is_in_vehicle, latest.recorded_at
     FROM public.emergency_alerts a
     JOIN public.profiles p ON p.id = a.owner_user_id
+    LEFT JOIN LATERAL (
+      SELECT l.recorded_at FROM public.emergency_locations l
+       WHERE l.emergency_alert_id = a.id
+       ORDER BY l.recorded_at DESC LIMIT 1
+    ) latest ON true
    WHERE a.recipient_user_id = p_viewer_user_id
       OR EXISTS (
         SELECT 1 FROM public.trusted_contacts tc
