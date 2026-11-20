@@ -8,8 +8,8 @@ export const ENV_DEFAULTS = {
   EMERGENCY_LINK_TTL_MINUTES: 60,
   GPS_INTERVAL_EMERGENCY_MS: 5000,
   GPS_INTERVAL_PASSIVE_MS: 60000,
-  SUPABASE_URL: 'https://gxkpiqmuhvpsbmooieod.supabase.co',
-  SUPABASE_ANON_KEY: 'sb_publishable_3CR_6m7aMGMjDWH_6C_o8g_kOCqNAxv',
+  SUPABASE_URL: 'https://ngsexidmirortoccbatd.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_vL9-w52Kq3HOukXhcbIC_Q_xdWzRCqX',
 } as const;
 
 export function getEnvVariable(key: string, fallback?: string): string {
