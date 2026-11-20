@@ -71,33 +71,39 @@ Deno.serve(async (request) => {
     const recipientIds = [...new Set((relationships ?? []).map((row) =>
       row.user_id === record.owner_user_id ? row.trusted_user_id : row.user_id,
     ))];
-    if (recipientIds.length === 0) return json({ sent: 0, reason: 'NO_TRUSTED_CONTACTS' });
+    if (recipientIds.length === 0) return json({ attempted: 0, sent: 0, failed: 0, reason: 'NO_TRUSTED_CONTACTS' });
 
-    const { data: devices, error: deviceError } = await supabase
-      .from('device_status')
-      .select('user_id, push_token')
-      .in('user_id', recipientIds)
-      .not('push_token', 'is', null);
+    const [{ data: devices, error: deviceError }, { data: ownerProfile, error: profileError }] = await Promise.all([
+      supabase.from('device_status').select('user_id, push_token').in('user_id', recipientIds).not('push_token', 'is', null),
+      supabase.from('profiles').select('display_name').eq('id', record.owner_user_id).maybeSingle(),
+    ]);
     if (deviceError) throw deviceError;
+    if (profileError) throw profileError;
+
+    const targets = (devices ?? []).filter((device) => Boolean(device.push_token));
+    if (targets.length === 0) return json({ attempted: 0, sent: 0, failed: 0, reason: 'NO_REGISTERED_PUSH_TOKENS' });
 
     const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')!);
     const accessToken = await googleAccessToken(serviceAccount);
+    const ownerName = ownerProfile?.display_name || 'Tu contacto de confianza';
     let sent = 0;
-    for (const device of devices ?? []) {
-      if (!device.push_token) continue;
+    const failureStatuses: number[] = [];
+    for (const device of targets) {
       const response = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
         method: 'POST',
         headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
         body: JSON.stringify({ message: {
           token: device.push_token,
-          notification: { title: '🚨 ALERTA ATENT', body: 'Tu contacto de confianza necesita auxilio inmediato' },
-          data: { alertId: String(record.id), ownerName: 'Tu contacto de confianza' },
-          android: { priority: 'HIGH', notification: { channel_id: 'atent_incoming_alerts', sound: 'default' } },
+          // Data-only, high-priority delivery wakes the native Firebase service
+          // when the Activity/WebView is closed or backgrounded.
+          data: { alertId: String(record.id), ownerName, alertType: 'SOS' },
+          android: { priority: 'HIGH', ttl: '600s' },
         } }),
       });
       if (response.ok) sent += 1;
+      else failureStatuses.push(response.status);
     }
-    return json({ sent });
+    return json({ attempted: targets.length, sent, failed: failureStatuses.length, failureStatuses });
   } catch (error) {
     console.error('send-emergency-push failed', error instanceof Error ? error.message : 'unknown');
     return json({ error: 'PUSH_DISPATCH_FAILED' }, 500);
