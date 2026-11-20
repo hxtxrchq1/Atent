@@ -98,7 +98,7 @@ Deno.serve(async (request) => {
           token: device.push_token,
           // Data-only, high-priority delivery wakes the native Firebase service
           // when the Activity/WebView is closed or backgrounded.
-          data: { alertId: String(record.id), ownerName, alertType: 'SOS' },
+          data: { alertId: String(record.id), ownerName, alertType: record.recipient_user_id ? 'DIRECT' : 'SOS' },
           android: { priority: 'HIGH', ttl: '600s' },
         } }),
       });

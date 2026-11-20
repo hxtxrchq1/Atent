@@ -46,7 +46,8 @@ class IncomingEmergencyAlertService : Service() {
         }
 
         val ownerName = intent?.getStringExtra("ownerName") ?: "Tu contacto de confianza"
-        startForeground(NOTIFICATION_ID, buildNotification(ownerName))
+        val alertType = intent?.getStringExtra("alertType") ?: "SOS"
+        startForeground(NOTIFICATION_ID, buildNotification(ownerName, alertType))
         startAlertSound()
         return START_STICKY
     }
@@ -86,7 +87,7 @@ class IncomingEmergencyAlertService : Service() {
         stopSelf()
     }
 
-    private fun buildNotification(ownerName: String): Notification {
+    private fun buildNotification(ownerName: String, alertType: String): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -96,8 +97,8 @@ class IncomingEmergencyAlertService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("Atent: $ownerName está en peligro")
-            .setContentText("Abre Atent para ver la emergencia y detener la alerta")
+            .setContentTitle(if (alertType == "DIRECT") "Atent: $ownerName te necesita" else "Atent: $ownerName está en peligro")
+            .setContentText(if (alertType == "DIRECT") "Te envió una alerta de ayuda individual." else "Abre Atent para ver la emergencia y detener la alerta")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)

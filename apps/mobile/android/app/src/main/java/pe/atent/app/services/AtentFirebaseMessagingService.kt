@@ -19,6 +19,7 @@ class AtentFirebaseMessagingService : FirebaseMessagingService() {
             action = IncomingEmergencyAlertService.ACTION_START
             putExtra("ownerName", ownerName)
             putExtra("alertId", data["alertId"])
+            putExtra("alertType", data["alertType"] ?: "SOS")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(alertIntent) else startService(alertIntent)
     }
