@@ -19,12 +19,12 @@ RETURNS TABLE (
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   -- Direct notifications are transient: expire them after 10 minutes.
-  UPDATE public.emergency_alerts
+  UPDATE public.emergency_alerts AS expired
      SET status = 'resolved', resolved_at = now(), updated_at = now()
-   WHERE recipient_user_id IS NOT NULL
-     AND status = 'active'
-     AND direct_alert_expires_at IS NOT NULL
-     AND direct_alert_expires_at <= now();
+   WHERE expired.recipient_user_id IS NOT NULL
+     AND expired.status = 'active'
+     AND expired.direct_alert_expires_at IS NOT NULL
+     AND expired.direct_alert_expires_at <= now();
 
   RETURN QUERY
   SELECT a.id, a.owner_user_id, p.display_name, p.avatar_url, a.status,
