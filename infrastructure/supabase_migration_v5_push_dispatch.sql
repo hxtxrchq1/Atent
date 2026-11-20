@@ -47,6 +47,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.dispatch_atent_emergency_push() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.dispatch_atent_emergency_push() FROM anon, authenticated;
 
 DROP TRIGGER IF EXISTS emergency_alerts_dispatch_push ON public.emergency_alerts;
 CREATE TRIGGER emergency_alerts_dispatch_push
