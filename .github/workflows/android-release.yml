@@ -31,6 +31,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
 
       - name: Install Dependencies
         run: npm ci
@@ -62,7 +65,15 @@ jobs:
 
       - name: Build debug APK
         working-directory: apps/mobile/android
-        run: bash ./gradlew --no-daemon assembleDebug
+        run: |
+          for attempt in 1 2 3; do
+            bash ./gradlew --no-daemon assembleDebug && exit 0
+            if [ "$attempt" -lt 3 ]; then
+              echo "Gradle build failed (possibly a transient repository rate limit); retrying in 20 seconds..."
+              sleep 20
+            fi
+          done
+          exit 1
 
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v4
