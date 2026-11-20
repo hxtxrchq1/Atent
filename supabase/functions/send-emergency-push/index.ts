@@ -68,9 +68,11 @@ Deno.serve(async (request) => {
       .or(`user_id.eq.${record.owner_user_id},trusted_user_id.eq.${record.owner_user_id}`);
     if (relationError) throw relationError;
 
-    const recipientIds = [...new Set((relationships ?? []).map((row) =>
-      row.user_id === record.owner_user_id ? row.trusted_user_id : row.user_id,
-    ))];
+    const recipientIds = record.recipient_user_id
+      ? [String(record.recipient_user_id)]
+      : [...new Set((relationships ?? []).map((row) =>
+          row.user_id === record.owner_user_id ? row.trusted_user_id : row.user_id,
+        ))];
     if (recipientIds.length === 0) return json({ attempted: 0, sent: 0, failed: 0, reason: 'NO_TRUSTED_CONTACTS' });
 
     const [{ data: devices, error: deviceError }, { data: ownerProfile, error: profileError }] = await Promise.all([

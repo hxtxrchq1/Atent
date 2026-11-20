@@ -753,6 +753,24 @@ export function DesignShowcaseApp() {
   // ==========================================
   // REQUISITO 7: GESTIÓN DE SOLICITUDES MUTUAS DE CONTACTOS
   // ==========================================
+  const handleNotifyContact = async (contact: TrustedContact) => {
+    if (!currentUser?.id) return { success: false, message: 'Debes iniciar sesión.' };
+    if (!contacts.some((trusted) => trusted.id === contact.id && trusted.trusted_user_id === contact.trusted_user_id)) {
+      return { success: false, message: 'Este contacto ya no pertenece a tu red de confianza.' };
+    }
+    try {
+      const { data, error } = await supabase.rpc('send_direct_trusted_alert', {
+        p_sender_user_id: currentUser.id,
+        p_recipient_user_id: contact.trusted_user_id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('No se recibió confirmación de la alerta.');
+      return { success: true, message: `Alerta individual enviada a ${contact.display_name}.` };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'No se pudo enviar la alerta individual.' };
+    }
+  };
+
   const handleSendContactRequest = async (phoneNormalized: string, name: string) => {
     if (!currentUser?.id) {
       return { success: false, message: 'Debes iniciar sesión.' };
@@ -1280,6 +1298,7 @@ export function DesignShowcaseApp() {
               onAcceptRequest={handleAcceptContactRequest}
               onRejectRequest={handleRejectContactRequest}
               onDeleteContact={handleDeleteContact}
+              onNotifyContact={handleNotifyContact}
               onOpenNativePicker={() => {
                 if (window.AndroidBridge?.pickPhoneContact) {
                   window.AndroidBridge.pickPhoneContact();

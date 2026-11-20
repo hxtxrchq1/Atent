@@ -36,6 +36,7 @@ interface ContactsScreenProps {
   onAcceptRequest: (requestId: string) => Promise<void>;
   onRejectRequest: (requestId: string) => Promise<void>;
   onDeleteContact: (contactId: string) => Promise<void>;
+  onNotifyContact: (contact: TrustedContact) => Promise<{ success: boolean; message: string }>;
   onOpenNativePicker: () => void;
   pickedContact?: { name: string; phone: string } | null;
   onPickedContactApplied?: () => void;
@@ -51,6 +52,7 @@ export function ContactsScreen({
   onAcceptRequest,
   onRejectRequest,
   onDeleteContact,
+  onNotifyContact,
   onOpenNativePicker,
   pickedContact,
   onPickedContactApplied,
@@ -62,6 +64,7 @@ export function ContactsScreen({
   const [targetName, setTargetName] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(COUNTRIES[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notifyingContactId, setNotifyingContactId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!pickedContact) return;
@@ -274,18 +277,50 @@ export function ContactsScreen({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onDeleteContact(contact.id)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#706877',
-                    cursor: 'pointer',
-                    padding: '6px',
-                  }}
-                >
-                  <VectorIcon name="cross" size={16} color="#706877" />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    disabled={notifyingContactId !== null}
+                    onClick={async () => {
+                      setNotifyingContactId(contact.id);
+                      try {
+                        const result = await onNotifyContact(contact);
+                        showToast(result.message);
+                      } catch {
+                        showToast('No se pudo enviar la alerta a este contacto.');
+                      } finally {
+                        setNotifyingContactId(null);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: notifyingContactId === contact.id ? '#706877' : '#F52D83',
+                      color: '#F8F5F8',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '9px 12px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      cursor: notifyingContactId !== null ? 'wait' : 'pointer',
+                      whiteSpace: 'nowrap',
+                      opacity: notifyingContactId !== null && notifyingContactId !== contact.id ? 0.6 : 1,
+                    }}
+                  >
+                    {notifyingContactId === contact.id ? 'Enviando…' : 'Notificar'}
+                  </button>
+                  <button
+                    onClick={() => onDeleteContact(contact.id)}
+                    aria-label={`Eliminar contacto ${contact.display_name}`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#706877',
+                      cursor: 'pointer',
+                      padding: '6px',
+                    }}
+                  >
+                    <VectorIcon name="cross" size={16} color="#706877" />
+                  </button>
+                </div>
               </div>
             ))
           )}
