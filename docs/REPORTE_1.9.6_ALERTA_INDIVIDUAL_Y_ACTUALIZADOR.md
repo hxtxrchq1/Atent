@@ -1,29 +1,60 @@
-# Atent 1.9.6 — Reporte de cambios
+# Atent 1.9.6 — Reporte de implementación
 
-## Funciones
-- Botón **Notificar** en cada contacto de confianza: envía una alerta individual sin notificar al resto.
-- El SOS principal sigue notificando a toda la red de confianza.
-- La RPC valida que el contacto sea una relación de confianza mutua.
-- Alertas directas se almacenan en emergency_alerts con recipient_user_id; get_trusted_alerts entrega alertas de SOS a la red y alertas directas solo al destinatario.
-- FCM: envío dirigido a un token del destinatario para alertas individuales; distribución a la red para SOS general.
-- Comprobador de versiones sincronizado con 1.9.6, consulta primero el manifiesto JSON en Raw GitHub (evita límites de la API), con fallback a GitHub Releases API.
+**Fecha:** 20 de noviembre de 2026  
+**APK:** Debug, Android  
+**Package:** `pe.atent.app`  
+**VersionName:** `1.9.6`  
+**VersionCode:** `12`
 
-## Limitaciones y seguridad
-- Notificar es una alerta puntual y no inicia GPS en vivo ni crea registros de ubicación.
-- FCM depende de token registrado, permiso de notificaciones y conexión. Android/los fabricantes pueden limitar procesos.
-- El bypass de No molestar requiere que el usuario haya otorgado permiso de acceso a la política de notificaciones y que el canal esté configurado correctamente.
-- El envío se valida con relación mutua de confianza, pero la aplicación usa IDs de perfil propios; la RPC no reemplaza una futura autenticación server-side completa.
-- No se hizo prueba real entre dos teléfonos ni se generó un SOS de prueba.
+## Cambios implementados
 
-## Actualizador
-- El manifiesto inicial refleja el APK público actual (1.9.1). Esta APK 1.9.6 no se publica automáticamente en GitHub Releases; por ello, el actualizador solo ofrecerá un APK cuando exista una versión superior publicada y con asset APK. No se debe confundir el artifact de Actions con un asset público de Releases.
+### Alertas individuales
+- Se añadió el botón **Notificar** al lado de cada contacto de la Red de Confianza.
+- Envía una alerta solo al destinatario seleccionado.
+- El SOS principal sigue enviando a toda la red de confianza.
+- El push individual tiene un canal Android separado, con notificación puntual (no la alarma SOS persistente).
+- La alerta individual se distingue en la lista y en los detalles.
+- Los avisos directos caducan a los 10 minutos.
+- Se limita un nuevo aviso al mismo contacto a uno por minuto.
+- La RPC verifica que exista una relación de confianza mutua antes de crear la alerta.
 
-## Verificación
-- CI Android: compilación y test automatizado pendiente.
-- Supabase: migración y despliegue Edge Function pendientes de aplicar/verificar.
-- Prueba real: pendiente de dispositivos y tokens FCM.
+### Supabase y FCM
+- Migraciones v6, v7, v8 y v9 aplicadas al proyecto `ngsexidmirortoccbatd`.
+- La RPC `send_direct_trusted_alert` está desplegada y validada con una llamada negativa (destinatarios sin relación mutua; se rechazó sin crear alerta).
+- `get_trusted_alerts` fue recreada con los campos de destinatario, conserva el campo de última ubicación y se probó una consulta de lectura.
+- La Edge Function `send-emergency-push` está desplegada en versión 4; el envío individual usa solo el destinatario y el SOS general conserva la distribución a toda la red.
+- GitHub Actions confirmó: `Firebase config injected for FCM`. No se muestran valores de secretos.
 
-## Cómo publicar una actualización futura
-1. Publicar un GitHub Release con tag de versión, por ejemplo v1.9.7, y adjuntar el APK.
-2. Actualizar update.json con la versión, notas y enlaces directos del release.
-3. Instalar una versión previa y comprobar que el botón Buscar actualizaciones detecta el release y abre el APK.
+## Comprobaciones
+
+- **GitHub Actions – Android:** éxito.
+- **GitHub Actions – CI, build/lint/test suite:** éxito.
+- **ZIP del artefacto:** integridad comprobada.
+- **APK:** `AndroidManifest.xml` inspeccionado; package `pe.atent.app`, versionName `1.9.6`, versionCode `12`.
+- **SHA-256:** `0dea8e6bab8a6d78ff330b31d2ee57726d89c77da5b02799dddb23d09c1cc8c`.
+- **Supabase:** 2 perfiles, 2 filas de relaciones de confianza, 2 tokens push, 0 alertas activas al momento de revisar.
+- No se activó SOS ni se enviaron notificaciones de prueba a contactos reales.
+
+## Comprobador de actualizaciones
+- Versión de la aplicación sincronizada a `1.9.6`.
+- Consulta primero el manifiesto `update.json` de Raw GitHub (evita depender del límite de peticiones de la API).
+- Tiene fallback a GitHub Releases API.
+- El APK contiene las URLs del manifiesto y del fallback.
+
+**Limitación de publicación:** el manifiesto público todavía indica la versión `1.9.1`. El APK `1.9.6` es un artefacto de Actions, no un asset de GitHub Release. Para que usuarios de versiones antiguas descarguen esta APK desde el actualizador, hace falta publicar `1.9.6` en Releases y actualizar `update.json`. El comportamiento del botón de actualización no se ha probado en un teléfono conectado a Internet.
+
+## Pendientes de prueba real
+1. Instalar en dos teléfonos y confirmar que el push individual llega solo al seleccionado.
+2. Confirmar que el SOS general llega a todos los contactos aceptados.
+3. Comprobar el canal individual con No Molestar: el bypass depende de que Android tenga concedido el acceso a la política de notificaciones.
+4. Probar el comprobador de actualizaciones desde la app con conexión real y publicar el APK en Releases.
+
+## Nota de seguridad
+Supabase Security Advisors reporta advertencias por funciones `SECURITY DEFINER` accesibles a roles anon/authenticated, incluyendo la nueva RPC. Atent usa autenticación telefónica propia, no una sesión de Supabase Auth que permita validar `auth.uid()` en esta RPC. La validación de confianza mutua y el límite de frecuencia reducen el abuso, pero **no eliminan el riesgo de suplantación del ID de emisor**. Se recomienda endurecer la autenticación del servidor antes de usar alertas reales en producción.
+
+## Enlaces
+- Repositorio: https://github.com/hxtxrchq1/Atent
+- Commit de la APK: https://github.com/hxtxrchq1/Atent/commit/2f39bd55d0d2877894e8dcf8a275e04432046f29
+- Android build: https://github.com/hxtxrchq1/Atent/actions/runs/44811412196
+- CI: https://github.com/hxtxrchq1/Atent/actions/runs/44811412616
+- GitHub Releases: https://github.com/hxtxrchq1/Atent/releases
