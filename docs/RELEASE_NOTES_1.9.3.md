@@ -26,7 +26,7 @@ select vault.create_secret(
 );
 ```
 
-No guardar la clave Service Role ni el JSON de Firebase en GitHub ni en el código del APK.
+No guardar la clave Service Role ni el JSON de Firebase en el código del APK. Para que el workflow incluya Firebase en el APK, guardar el contenido de `google-services.json` como secreto de repositorio `GOOGLE_SERVICES_JSON`. Si no está configurado, el APK compilará sin registro FCM y las notificaciones Push no funcionarán.
 
 ## Comprobaciones para prueba real
 
