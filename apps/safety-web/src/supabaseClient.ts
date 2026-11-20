@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { ENV_DEFAULTS } from '@atent/config';
 
-export const SUPABASE_URL = ENV_DEFAULTS.SUPABASE_URL || 'https://gxkpiqmuhvpsbmooieod.supabase.co';
-export const SUPABASE_ANON_KEY = ENV_DEFAULTS.SUPABASE_ANON_KEY || 'sb_publishable_3CR_6m7aMGMjDWH_6C_o8g_kOCqNAxv';
+export const SUPABASE_URL = ENV_DEFAULTS.SUPABASE_URL || 'https://ngsexidmirortoccbatd.supabase.co';
+export const SUPABASE_ANON_KEY = ENV_DEFAULTS.SUPABASE_ANON_KEY || 'sb_publishable_vL9-w52Kq3HOukXhcbIC_Q_xdWzRCqX';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
