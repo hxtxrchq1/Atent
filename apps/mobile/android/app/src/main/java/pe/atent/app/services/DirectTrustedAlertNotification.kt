@@ -17,7 +17,28 @@ import pe.atent.app.MainActivity
 object DirectTrustedAlertNotification {
     private const val CHANNEL_ID = "atent_direct_trusted_alerts"
 
+    private const val PREFS = "trusted_alert_receiver"
+    private const val SHOWN_ALERT_IDS = "shown_direct_alert_ids"
+
+    fun notificationId(alertId: String): Int =
+        100000 + (alertId.hashCode() and 0x7fffffff) % 900000
+
+    fun shownAlertIds(context: Context): Set<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(SHOWN_ALERT_IDS, emptySet())?.toSet() ?: emptySet()
+
+    fun cancel(context: Context, alertId: String) {
+        NotificationManagerCompat.from(context).cancel(notificationId(alertId))
+    }
+
     fun show(context: Context, senderName: String, alertId: String) {
+        if (alertId.isNotBlank()) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val shown = (prefs.getStringSet(SHOWN_ALERT_IDS, emptySet()) ?: emptySet()).toMutableSet()
+            if (alertId in shown) return
+            shown.add(alertId)
+            while (shown.size > 100) shown.remove(shown.first())
+            prefs.edit().putStringSet(SHOWN_ALERT_IDS, shown).apply()
+        }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
@@ -42,7 +63,7 @@ object DirectTrustedAlertNotification {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("directAlertId", alertId)
         }
-        val notificationId = 100000 + (alertId.hashCode() and 0x7fffffff) % 900000
+        val notificationId = notificationId(alertId)
         val pendingIntent = PendingIntent.getActivity(
             context, notificationId, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT

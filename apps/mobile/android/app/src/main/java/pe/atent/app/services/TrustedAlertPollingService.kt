@@ -31,6 +31,7 @@ class TrustedAlertPollingService : Service() {
         private const val USER_ID = "user_id"
         private const val LAST_ALERT = "last_alert_id"
         private const val HANDLED_ALERTS = "handled_alert_ids"
+        private const val DIRECT_ALERT_IDS = "active_direct_alert_notification_ids"
         private const val SUPABASE_URL = "https://ngsexidmirortoccbatd.supabase.co"
         private const val SUPABASE_KEY = "sb_publishable_vL9-w52Kq3HOukXhcbIC_Q_xdWzRCqX"
 
@@ -106,7 +107,16 @@ class TrustedAlertPollingService : Service() {
             val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
             val handled = (prefs.getStringSet(HANDLED_ALERTS, emptySet()) ?: emptySet()).toMutableSet()
             prefs.getString(LAST_ALERT, null)?.let { handled.add(it) } // migrates legacy single-id dedupe
+            val activeDirectIds = mutableSetOf<String>()
+            val previousDirectIds = (prefs.getStringSet(DIRECT_ALERT_IDS, emptySet()) ?: emptySet()).toMutableSet().apply { addAll(DirectTrustedAlertNotification.shownAlertIds(this@TrustedAlertPollingService)) }
             for (index in 0 until alerts.length()) {
+                val current = alerts.getJSONObject(index)
+                val directId = current.optString("id")
+                if (current.optString("status") == "active" && current.optString("recipient_user_id") == userId && directId.isNotBlank()) activeDirectIds.add(directId)
+            }
+            previousDirectIds.filter { it !in activeDirectIds }.forEach { DirectTrustedAlertNotification.cancel(this, it) }
+            prefs.edit().putStringSet(DIRECT_ALERT_IDS, activeDirectIds).apply()
+            for (index in 0 until alerts.length() {
                 val alert = alerts.getJSONObject(index)
                 if (alert.optString("status") != "active") continue
                 val id = alert.optString("id")
@@ -126,6 +136,7 @@ class TrustedAlertPollingService : Service() {
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(alertIntent) else startService(alertIntent)
                 }
+                if (recipientUserId.isNotBlank() && recipientUserId == userId) continue
                 break
             }
         } catch (_: Exception) {

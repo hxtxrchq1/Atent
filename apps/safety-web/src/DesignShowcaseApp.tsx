@@ -73,6 +73,7 @@ export function DesignShowcaseApp() {
   const [contacts, setContacts] = useState<TrustedContact[]>([]);
   const [receivedRequests, setReceivedRequests] = useState<ContactRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<ContactRequest[]>([]);
+  const [activeDirectAlerts, setActiveDirectAlerts] = useState<{ recipientUserId: string; alertId: string; expiresAt: string }[]>([]);
   const [pickedContact, setPickedContact] = useState<{ name: string; phone: string } | null>(null);
 
   // ALERTAS DE CONTACTOS (Requisito 8)
@@ -265,6 +266,21 @@ export function DesignShowcaseApp() {
         );
       }
 
+      // Alertas individuales activas del usuario, para permitir detenerlas desde cada contacto.
+      const { data: directAlertRows, error: directAlertError } = await supabase
+        .from('emergency_alerts')
+        .select('id, recipient_user_id, direct_alert_expires_at')
+        .eq('owner_user_id', currentUser.id)
+        .eq('status', 'active')
+        .not('recipient_user_id', 'is', null);
+      if (!directAlertError && directAlertRows) {
+        setActiveDirectAlerts(
+          directAlertRows
+            .filter((a: any) => a.recipient_user_id && (!a.direct_alert_expires_at || new Date(a.direct_alert_expires_at).getTime() > Date.now()))
+            .map((a: any) => ({ recipientUserId: a.recipient_user_id, alertId: a.id, expiresAt: a.direct_alert_expires_at || new Date(Date.now() + 10 * 60 * 1000).toISOString() }))
+        );
+      }
+
       // 2. Solicitudes recibidas pendientes
       const { data: recData } = await supabase
         .from('trusted_contact_requests')
@@ -369,7 +385,7 @@ export function DesignShowcaseApp() {
   // el sondeo corto mantiene el panel actualizado en instalaciones sin Realtime.
   useEffect(() => {
     if (!currentUser?.id) return;
-    const refresh = () => { void loadTrustedAlerts(); };
+    const refresh = () => { void loadTrustedAlerts(); void loadContactsAndRequests(); };
     const interval = window.setInterval(refresh, 5000);
     const channel = supabase
       .channel(`trusted-alerts-${currentUser.id}`)
@@ -754,6 +770,25 @@ export function DesignShowcaseApp() {
   // ==========================================
   // REQUISITO 7: GESTIÓN DE SOLICITUDES MUTUAS DE CONTACTOS
   // ==========================================
+  const handleStopNotifyContact = async (contact: TrustedContact, alertId: string) => {
+    if (!currentUser?.id) return { success: false, message: 'Debes iniciar sesión.' };
+    if (!contacts.some((trusted) => trusted.id === contact.id && trusted.trusted_user_id === contact.trusted_user_id)) {
+      return { success: false, message: 'Este contacto ya no pertenece a tu red de confianza.' };
+    }
+    try {
+      const { data, error } = await supabase.rpc('cancel_direct_trusted_alert', {
+        p_sender_user_id: currentUser.id,
+        p_alert_id: alertId,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('No se confirmó la cancelación de la alerta.');
+      await loadContactsAndRequests();
+      return { success: true, message: `Dejaste de notificar a ${contact.display_name}.` };
+    } catch {
+      return { success: false, message: 'No se pudo detener la alerta. Comprueba tu conexión e inténtalo nuevamente.' };
+    }
+  };
+
   const handleNotifyContact = async (contact: TrustedContact) => {
     if (!currentUser?.id) return { success: false, message: 'Debes iniciar sesión.' };
     if (!contacts.some((trusted) => trusted.id === contact.id && trusted.trusted_user_id === contact.trusted_user_id)) {
@@ -766,6 +801,7 @@ export function DesignShowcaseApp() {
       });
       if (error) throw error;
       if (!data) throw new Error('No se recibió confirmación de la alerta.');
+      await loadContactsAndRequests();
       return { success: true, message: `Alerta individual enviada a ${contact.display_name}.` };
     } catch (error: any) {
       const code = String(error?.message || '');
@@ -1303,6 +1339,8 @@ export function DesignShowcaseApp() {
               onRejectRequest={handleRejectContactRequest}
               onDeleteContact={handleDeleteContact}
               onNotifyContact={handleNotifyContact}
+              activeDirectAlerts={activeDirectAlerts}
+              onStopNotifyContact={handleStopNotifyContact}
               onOpenNativePicker={() => {
                 if (window.AndroidBridge?.pickPhoneContact) {
                   window.AndroidBridge.pickPhoneContact();

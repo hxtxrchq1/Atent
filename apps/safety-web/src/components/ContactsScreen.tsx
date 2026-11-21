@@ -27,8 +27,15 @@ export interface ContactRequest {
   created_at: string;
 }
 
+interface ActiveDirectAlert {
+  recipientUserId: string;
+  alertId: string;
+  expiresAt: string;
+}
+
 interface ContactsScreenProps {
   contacts: TrustedContact[];
+  activeDirectAlerts: ActiveDirectAlert[];
   receivedRequests: ContactRequest[];
   sentRequests: ContactRequest[];
   currentUserId: string;
@@ -37,6 +44,7 @@ interface ContactsScreenProps {
   onRejectRequest: (requestId: string) => Promise<void>;
   onDeleteContact: (contactId: string) => Promise<void>;
   onNotifyContact: (contact: TrustedContact) => Promise<{ success: boolean; message: string }>;
+  onStopNotifyContact: (contact: TrustedContact, alertId: string) => Promise<{ success: boolean; message: string }>;
   onOpenNativePicker: () => void;
   pickedContact?: { name: string; phone: string } | null;
   onPickedContactApplied?: () => void;
@@ -45,6 +53,7 @@ interface ContactsScreenProps {
 
 export function ContactsScreen({
   contacts,
+  activeDirectAlerts,
   receivedRequests,
   sentRequests,
   currentUserId,
@@ -53,6 +62,7 @@ export function ContactsScreen({
   onRejectRequest,
   onDeleteContact,
   onNotifyContact,
+  onStopNotifyContact,
   onOpenNativePicker,
   pickedContact,
   onPickedContactApplied,
@@ -255,7 +265,9 @@ export function ContactsScreen({
               </button>
             </div>
           ) : (
-            contacts.map((contact) => (
+            contacts.map((contact) => {
+              const activeDirectAlert = activeDirectAlerts.find((alert) => alert.recipientUserId === contact.trusted_user_id && new Date(alert.expiresAt).getTime() > Date.now());
+              return (
               <div
                 key={contact.id}
                 style={{
@@ -284,7 +296,9 @@ export function ContactsScreen({
                     onClick={async () => {
                       setNotifyingContactId(contact.id);
                       try {
-                        const result = await onNotifyContact(contact);
+                        const result = activeDirectAlert
+                          ? await onStopNotifyContact(contact, activeDirectAlert.alertId)
+                          : await onNotifyContact(contact);
                         showToast(result.message);
                       } catch {
                         showToast('No se pudo enviar la alerta a este contacto.');
@@ -293,7 +307,7 @@ export function ContactsScreen({
                       }
                     }}
                     style={{
-                      backgroundColor: notifyingContactId === contact.id ? '#706877' : '#F52D83',
+                      backgroundColor: notifyingContactId === contact.id ? '#706877' : activeDirectAlert ? '#B42345' : '#F52D83',
                       color: '#F8F5F8',
                       border: 'none',
                       borderRadius: '10px',
@@ -305,7 +319,7 @@ export function ContactsScreen({
                       opacity: notifyingContactId !== null && notifyingContactId !== contact.id ? 0.6 : 1,
                     }}
                   >
-                    {notifyingContactId === contact.id ? 'Enviando…' : 'Notificar'}
+                    {notifyingContactId === contact.id ? (activeDirectAlert ? 'Deteniendo…' : 'Enviando…') : activeDirectAlert ? 'Dejar de notificar' : 'Notificar'}
                   </button>
                   <button
                     onClick={() => onDeleteContact(contact.id)}
@@ -322,7 +336,8 @@ export function ContactsScreen({
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
