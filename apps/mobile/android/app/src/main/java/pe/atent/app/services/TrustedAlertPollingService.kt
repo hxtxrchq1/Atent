@@ -116,7 +116,7 @@ class TrustedAlertPollingService : Service() {
             }
             previousDirectIds.filter { it !in activeDirectIds }.forEach { DirectTrustedAlertNotification.cancel(this, it) }
             prefs.edit().putStringSet(DIRECT_ALERT_IDS, activeDirectIds).apply()
-            for (index in 0 until alerts.length() {
+            for (index in 0 until alerts.length()) {
                 val alert = alerts.getJSONObject(index)
                 if (alert.optString("status") != "active") continue
                 val id = alert.optString("id")
