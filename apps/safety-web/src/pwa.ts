@@ -116,6 +116,7 @@ export async function disableWebPush(sessionToken: string): Promise<void> {
 }
 
 let emergencyAudioContext: AudioContext | null = null;
+let emergencyAudioElement: HTMLAudioElement | null = null;
 const SOUND_PREFERENCE = 'atent_emergency_sound_enabled';
 const VIBRATION_PREFERENCE = 'atent_emergency_vibration_enabled';
 
@@ -130,9 +131,9 @@ export function isEmergencySoundEnabled(): boolean {
   return savedPreference === 'true' || (savedPreference === null && getClientPlatform().startsWith('ios-'));
 }
 
-export async function setEmergencySoundEnabled(enabled: boolean): Promise<void> {
+export async function setEmergencySoundEnabled(enabled: boolean): Promise<boolean> {
   localStorage.setItem(SOUND_PREFERENCE, String(enabled));
-  if (enabled) await playEmergencySound(true);
+  return enabled ? playEmergencySound(true) : true;
 }
 
 export function isEmergencyVibrationEnabled(): boolean {
@@ -147,33 +148,61 @@ export function setEmergencyVibrationEnabled(enabled: boolean): void {
   localStorage.setItem(VIBRATION_PREFERENCE, String(enabled));
 }
 
-export async function playEmergencySound(test = false): Promise<void> {
-  if (!test && !isEmergencySoundEnabled()) return;
-  const context = getEmergencyAudioContext();
-  if (!context) return;
-  await context.resume().catch(() => undefined);
-  if (context.state !== 'running') return;
-  const startAt = context.currentTime + 0.03;
-  const count = test ? 1 : 4;
-  for (let index = 0; index < count; index += 1) {
-    const at = startAt + index * 0.42;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(index % 2 === 0 ? 880 : 660, at);
-    gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(0.16, at + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(at);
-    oscillator.stop(at + 0.25);
+export async function playEmergencySound(test = false): Promise<boolean> {
+  if (!test && !isEmergencySoundEnabled()) return false;
+
+  // Start a real media file synchronously before awaiting anything. Safari's
+  // user-activation gate is more reliable for HTMLAudioElement.play() than a
+  // Web Audio source scheduled after an async AudioContext.resume().
+  try {
+    emergencyAudioElement ??= new Audio('/sounds/atent-alert.wav');
+    emergencyAudioElement.preload = 'auto';
+    emergencyAudioElement.volume = 1;
+    emergencyAudioElement.currentTime = 0;
+    await emergencyAudioElement.play();
+    return true;
+  } catch {
+    // Fall back to Web Audio on browsers where the media element failed.
+  }
+
+  try {
+    const context = getEmergencyAudioContext();
+    if (!context) return false;
+    const resume = context.state === 'suspended' ? context.resume() : Promise.resolve();
+    const startAt = context.currentTime + 0.03;
+    const count = test ? 1 : 4;
+    for (let index = 0; index < count; index += 1) {
+      const at = startAt + index * 0.42;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(index % 2 === 0 ? 880 : 660, at);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.65, at + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.25);
+    }
+    await resume;
+    return context.state === 'running';
+  } catch {
+    return false;
   }
 }
 
 export function unlockEmergencyAudio(): void {
-  const context = getEmergencyAudioContext();
-  if (context?.state === 'suspended') void context.resume().catch(() => undefined);
+  try {
+    emergencyAudioElement ??= new Audio('/sounds/atent-alert.wav');
+    emergencyAudioElement.preload = 'auto';
+    // Prime Safari's media pipeline during the user's tap. Playback begins
+    // only when the user requests a test or an alert is received.
+    const context = getEmergencyAudioContext();
+    if (context?.state === 'suspended') void context.resume().catch(() => undefined);
+  } catch {
+    // The explicit test button will report if this browser cannot play audio.
+  }
 }
 
 export function vibrateForEmergency(): void {

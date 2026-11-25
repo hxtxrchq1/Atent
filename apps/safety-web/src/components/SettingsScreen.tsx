@@ -103,8 +103,13 @@ export function SettingsScreen({
   const handleSoundToggle = async () => {
     const nextEnabled = !soundEnabled;
     setSoundEnabled(nextEnabled);
-    await setEmergencySoundEnabled(nextEnabled);
-    showToast(nextEnabled ? 'Sonido de alertas activado. Escucha la prueba.' : 'Sonido de alertas desactivado.');
+    const played = await setEmergencySoundEnabled(nextEnabled);
+    showToast(!nextEnabled ? 'Sonido de alertas desactivado.' : played ? 'Safari inició el sonido de prueba. Confirma que lo escuchas.' : 'Safari bloqueó el audio. Revisa el modo silencio y el volumen del iPhone.');
+  };
+
+  const handleSoundTest = async () => {
+    const played = await playEmergencySound(true);
+    showToast(played ? 'Safari inició el sonido. Si no lo escuchas, sube el volumen y desactiva silencio.' : 'Safari bloqueó el sonido. Sube el volumen, desactiva silencio y vuelve a tocar para probar.');
   };
 
   const handleVibrationToggle = () => {
@@ -339,7 +344,7 @@ export function SettingsScreen({
             Vibración: {isEmergencyVibrationSupported() ? (vibrationEnabled ? 'Activada' : 'Desactivada') : 'La controla iOS'}
           </button>
           {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Una PWA no puede mantener vibración repetida hasta abrir Alertas. iOS controla la vibración de cada notificación desde Ajustes.</p>}
-          {soundEnabled && <button type="button" onClick={() => void playEmergencySound(true)} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
+          {soundEnabled && <button type="button" onClick={() => void handleSoundTest()} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
           <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent en segundo plano o el iPhone bloqueado, el sonido estándar de la notificación depende de Ajustes → Notificaciones → Atent → Sonidos, el modo silencio y Enfoque. La PWA no puede elegir un tono propio ni insistir hasta que abras Alertas.</p>
         </div>
 

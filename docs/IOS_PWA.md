@@ -29,7 +29,7 @@ La instalación y la recepción de Web Push en iPhone requieren abrir la PWA des
 - Vercel: usar `apps/safety-web` como raíz del proyecto, comando `npm run build`, output `dist`; el `vercel.json` local configura fallback SPA, MIME/caché del Service Worker y cabeceras.
 - El Service Worker usa ámbito `/`, mantiene solo shell/archivos estáticos en caché y excluye API y respuestas autenticadas.
 - El viewport usa el alto dinámico del iPhone, respeta el área segura y reduce el SOS/contenido en pantallas compactas para mantener visible la navegación.
-- El sonido dentro de Atent solo puede repetirse cuando la PWA está en primer plano; se detiene al abrir Alertas. Safari iOS no implementa `navigator.vibrate()`. En segundo plano iOS decide sonido y háptica de cada Push desde sus ajustes; una PWA no puede forzar tono personalizado ni vibración recurrente.
+- El sonido interno usa un WAV local precargado y se inicia directamente desde el toque de prueba para cumplir la política de audio de Safari. Una alerta activa puede repetirlo mientras la PWA está en primer plano; se detiene al abrir Alertas. Safari iOS no implementa `navigator.vibrate()`. En segundo plano iOS decide sonido y háptica de cada Push desde sus ajustes; una PWA no puede forzar tono personalizado ni vibración recurrente.
 - iOS no ofrece a una PWA una API pública para abrir directamente Enfoque o agregarse a su lista permitida. Atent muestra pasos breves dentro de Ajustes.
 - Ubicación: se etiqueta como última ubicación conocida con precisión y hora; no hay promesa de seguimiento continuo cuando iOS suspende la app.
 
