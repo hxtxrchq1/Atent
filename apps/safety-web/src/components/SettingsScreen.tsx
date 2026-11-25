@@ -45,6 +45,7 @@ export function SettingsScreen({
   const [vibrationEnabled, setVibrationEnabled] = useState(isEmergencyVibrationEnabled);
   const [focusGuideOpen, setFocusGuideOpen] = useState(false);
   const isIos = getClientPlatform().startsWith('ios-');
+  const isAndroidApp = Boolean(window.AndroidBridge);
 
   useEffect(() => {
     let active = true;
@@ -317,23 +318,25 @@ export function SettingsScreen({
           </div>
         )}
 
-        <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
-          <strong style={{ color: '#F8F5F8' }}>Notificaciones de Atent</strong>
-          <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? (pushEnabled ? 'Este dispositivo tiene una suscripción Push activa.' : 'Activa el permiso del sistema y registra este dispositivo en tu cuenta.') : pushSupport.reason}</p>
-          {pushSupport.supported && (
-            <>
-              {!currentUser?.web_session_token && <p style={{ margin: '0 0 8px', color: '#FFB4CF' }}>Inicia sesión de nuevo una vez para vincular este dispositivo de forma segura.</p>}
-              <button type="button" disabled={pushBusy || !currentUser?.web_session_token} onClick={() => void handlePushToggle()} style={{ width: '100%', minHeight: 44, padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
-                {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Permitir notificaciones'}
-              </button>
-              {pushEnabled && (
-                <button type="button" disabled={pushTestBusy || !currentUser?.web_session_token} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, minHeight: 44, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
-                  {pushTestBusy ? pushTestStatus === 'queued' ? 'Esperando confirmación de Apple…' : 'Enviando prueba…' : 'Probar notificación'}
+        {!isAndroidApp && (
+          <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
+            <strong style={{ color: '#F8F5F8' }}>Notificaciones de Atent</strong>
+            <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? (pushEnabled ? 'Este dispositivo tiene una suscripción Push activa.' : 'Activa el permiso del sistema y registra este dispositivo en tu cuenta.') : pushSupport.reason}</p>
+            {pushSupport.supported && (
+              <>
+                {!currentUser?.web_session_token && <p style={{ margin: '0 0 8px', color: '#FFB4CF' }}>Inicia sesión de nuevo una vez para vincular este dispositivo de forma segura.</p>}
+                <button type="button" disabled={pushBusy || !currentUser?.web_session_token} onClick={() => void handlePushToggle()} style={{ width: '100%', minHeight: 44, padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
+                  {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Permitir notificaciones'}
                 </button>
-              )}
-            </>
-          )}
-        </div>
+                {pushEnabled && (
+                  <button type="button" disabled={pushTestBusy || !currentUser?.web_session_token} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, minHeight: 44, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
+                    {pushTestBusy ? pushTestStatus === 'queued' ? 'Esperando confirmación de Apple…' : 'Enviando prueba…' : 'Probar notificación'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
           <strong style={{ color: '#F8F5F8' }}>Sonido mientras Atent está abierta</strong>
@@ -345,7 +348,7 @@ export function SettingsScreen({
           </button>
           {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Una PWA no puede mantener vibración repetida hasta abrir Alertas. iOS controla la vibración de cada notificación desde Ajustes.</p>}
           {soundEnabled && <button type="button" onClick={() => void handleSoundTest()} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
-          <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent suspendida, el servidor repite la notificación de iOS cada minuto (las primeras 5 veces) y luego cada 5 minutos, hasta que abras Alertas o termine la emergencia. iOS decide si cada aviso suena; la PWA no puede poner el MP3 de Android como sonido del sistema.</p>
+          {isIos && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent suspendida, el servidor repite la notificación de iOS cada minuto (las primeras 5 veces) y luego cada 5 minutos, hasta que abras Alertas o termine la emergencia. iOS decide si cada aviso suena; la PWA no puede poner el MP3 de Android como sonido del sistema.</p>}
         </div>
 
         {isIos ? (

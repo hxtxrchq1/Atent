@@ -1,7 +1,7 @@
 {
-  "version": "1.9.9",
-  "title": "Atent 1.9.9",
-  "notes": "Se corrigió la descarga del APK desde el botón dentro de la app Android.",
-  "releaseUrl": "https://github.com/hxtxrchq1/Atent/releases/tag/v1.9.9",
-  "downloadUrl": "https://github.com/hxtxrchq1/Atent/releases/download/v1.9.9/Atent-v1.9.9-debug.apk"
+  "version": "1.10.0",
+  "title": "Atent 1.10.0",
+  "notes": "Se limpiaron los ajustes Android para ocultar instrucciones exclusivas de iPhone y web push.",
+  "releaseUrl": "https://github.com/hxtxrchq1/Atent/releases/tag/v1.10.0",
+  "downloadUrl": "https://github.com/hxtxrchq1/Atent/releases/download/v1.10.0/Atent-v1.10.0-debug.apk"
 }
