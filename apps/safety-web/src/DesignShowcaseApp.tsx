@@ -171,6 +171,7 @@ export function DesignShowcaseApp() {
     accuracy: number;
     timestamp: number;
   } | null>(null);
+  const realLocationRef = useRef<typeof realLocation>(null);
   const [locationStatus, setLocationStatus] = useState<'IDLE' | 'FETCHING' | 'AVAILABLE' | 'UNAVAILABLE' | 'PERMISSION_DENIED'>('IDLE');
   const [locationErrorMessage, setLocationErrorMessage] = useState<string | null>(null);
   const locationRequestIdRef = useRef<string | null>(null);
@@ -185,6 +186,7 @@ export function DesignShowcaseApp() {
   const batteryStateRef = useRef<{ level: number; isCharging: boolean } | null>(null);
   const tripModeRef = useRef(false);
   activeEmergencyAlertIdRef.current = activeEmergencyAlertId;
+  realLocationRef.current = realLocation;
   currentUserRef.current = currentUser;
   batteryStateRef.current = batteryState;
   tripModeRef.current = isTripModeEnabled;
@@ -569,6 +571,7 @@ export function DesignShowcaseApp() {
     window.onAndroidLocationReceived = (loc) => {
       if (loc.requestId && loc.requestId !== locationRequestIdRef.current) return;
       locationRequestInFlightRef.current = false;
+      realLocationRef.current = loc;
       setRealLocation(loc);
       setLocationStatus('AVAILABLE');
       setLocationErrorMessage(null);
@@ -649,6 +652,7 @@ export function DesignShowcaseApp() {
     // La pantalla del propietario se actualiza inmediatamente, mientras que
     // el usuario 2 recibe el mismo punto mediante emergency_alerts + Realtime
     // (con sondeo de respaldo cada 5 s).
+    realLocationRef.current = loc;
     setRealLocation(loc);
     setLocationStatus('AVAILABLE');
     setLocationErrorMessage(null);
@@ -709,14 +713,20 @@ export function DesignShowcaseApp() {
             accuracy: pos.coords.accuracy,
             timestamp: pos.timestamp,
           };
+          realLocationRef.current = nextLocation;
           setRealLocation(nextLocation);
           setLocationStatus('AVAILABLE');
           void syncActiveEmergencyTelemetry(nextLocation);
         },
         (err) => {
           locationRequestInFlightRef.current = false;
-          setLocationStatus('UNAVAILABLE');
-          setLocationErrorMessage(err.message || 'No fue posible obtener coordenadas');
+          if (err.code === err.PERMISSION_DENIED) {
+            setLocationStatus('PERMISSION_DENIED');
+            setLocationErrorMessage('Permite la ubicación para Atent en Safari y vuelve a intentar.');
+          } else {
+            setLocationStatus('UNAVAILABLE');
+            setLocationErrorMessage(err.message || 'No fue posible obtener coordenadas');
+          }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -777,11 +787,11 @@ export function DesignShowcaseApp() {
               owner_user_id: currentUser.id,
               status: 'active',
               trigger_source: 'INSTANT_TAP',
-              initial_latitude: realLocation?.latitude || null,
-              initial_longitude: realLocation?.longitude || null,
-              initial_accuracy: realLocation?.accuracy || null,
-              last_latitude: realLocation?.latitude || null,
-              last_longitude: realLocation?.longitude || null,
+              initial_latitude: realLocationRef.current?.latitude ?? null,
+              initial_longitude: realLocationRef.current?.longitude ?? null,
+              initial_accuracy: realLocationRef.current?.accuracy ?? null,
+              last_latitude: realLocationRef.current?.latitude ?? null,
+              last_longitude: realLocationRef.current?.longitude ?? null,
               last_battery_level: batteryState?.level || null,
               last_battery_charging: batteryState?.isCharging || false,
               is_in_vehicle: isTripModeEnabled,
@@ -795,16 +805,23 @@ export function DesignShowcaseApp() {
         if (newAlert?.id) {
           setActiveEmergencyAlertId(newAlert.id);
           activeEmergencyAlertIdRef.current = newAlert.id;
-          await supabase.from('emergency_locations').insert([{
-            emergency_alert_id: newAlert.id,
-            latitude: realLocation?.latitude,
-            longitude: realLocation?.longitude,
-            accuracy: realLocation?.accuracy,
-            battery_level: batteryState?.level ?? null,
-            is_charging: batteryState?.isCharging ?? false,
-            is_in_vehicle: isTripModeEnabled,
-            recorded_at: realLocation?.timestamp ? new Date(realLocation.timestamp).toISOString() : new Date().toISOString(),
-          }]);
+          const initialLocation = realLocationRef.current;
+          if (initialLocation && Number.isFinite(initialLocation.latitude) && Number.isFinite(initialLocation.longitude)) {
+            const { error: locationInsertError } = await supabase.from('emergency_locations').insert([{
+              emergency_alert_id: newAlert.id,
+              latitude: initialLocation.latitude,
+              longitude: initialLocation.longitude,
+              accuracy: initialLocation.accuracy,
+              battery_level: batteryStateRef.current?.level ?? null,
+              is_charging: batteryStateRef.current?.isCharging ?? false,
+              is_in_vehicle: tripModeRef.current,
+              recorded_at: new Date(initialLocation.timestamp).toISOString(),
+            }]);
+            if (locationInsertError) showToast('La alerta salió, pero no pudimos guardar el punto inicial. Actualizando ubicación…');
+          }
+          // Ahora que existe un id de alerta, una lectura recién obtenida se
+          // asociará al mismo registro y suena/mapa ya la podrán compartir.
+          requestDeviceLocation();
         }
       } catch {
         // Continuar en modo offline seguro
@@ -899,14 +916,53 @@ export function DesignShowcaseApp() {
       return { success: false, message: 'Este contacto ya no pertenece a tu red de confianza.' };
     }
     try {
-      const { data, error } = await supabase.rpc('send_direct_trusted_alert', {
+      // Pedir una posición al pulsar Notificar (gesto explícito en Safari) y
+      // usar la posición del panel como respaldo si el GPS tarda o se deniega.
+      const cached = realLocationRef.current;
+      const freshLocation = !window.AndroidBridge?.getRealLocation && navigator.geolocation
+        ? await new Promise<{ latitude: number; longitude: number; accuracy: number; timestamp: number } | null>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: position.timestamp,
+            }),
+            (geoError) => {
+              if (geoError.code === geoError.PERMISSION_DENIED) {
+                setLocationStatus('PERMISSION_DENIED');
+                setLocationErrorMessage('Permite la ubicación para Atent en Safari para compartirla en alertas.');
+              }
+              resolve(null);
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+          );
+        })
+        : null;
+      const location = freshLocation || cached;
+      if (freshLocation) {
+        realLocationRef.current = freshLocation;
+        setRealLocation(freshLocation);
+        setLocationStatus('AVAILABLE');
+        setLocationErrorMessage(null);
+      }
+      const { data, error } = await supabase.rpc('send_direct_trusted_alert_with_location', {
         p_sender_user_id: currentUser.id,
         p_recipient_user_id: contact.trusted_user_id,
+        p_latitude: location?.latitude ?? null,
+        p_longitude: location?.longitude ?? null,
+        p_accuracy: location?.accuracy ?? null,
+        p_recorded_at: location ? new Date(location.timestamp).toISOString() : null,
       });
       if (error) throw error;
       if (!data) throw new Error('No se recibió confirmación de la alerta.');
       await loadContactsAndRequests();
-      return { success: true, message: `Alerta individual enviada a ${contact.display_name}.` };
+      return {
+        success: true,
+        message: location
+          ? `Alerta individual enviada a ${contact.display_name} con ubicación.`
+          : `Alerta individual enviada a ${contact.display_name}, pero el teléfono no compartió ubicación. Revisa el permiso de ubicación de Atent en Safari.`,
+      };
     } catch (error: any) {
       const code = String(error?.message || '');
       if (code.includes('DIRECT_ALERT_RATE_LIMIT')) return { success: false, message: 'Espera un minuto antes de volver a notificar a esta persona.' };
