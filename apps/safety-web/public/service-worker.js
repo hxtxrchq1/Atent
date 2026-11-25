@@ -36,21 +36,27 @@ self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() || '' }; }
   const data = payload.data || {};
-  const options = {
-    body: payload.body || 'Un contacto de confianza necesita tu atención.',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    silent: false,
-    tag: data.alertId
-      ? `atent-emergency-${data.alertId}${data.repeat ? `-${data.repeatCount || Date.now()}` : ''}`
-      : undefined,
-    renotify: Boolean(data.alertId),
-    data: {
-      alertId: data.alertId || null,
-      url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/'),
-    },
-  };
-  event.waitUntil(self.registration.showNotification(payload.title || 'Alerta de Atent', options));
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const appIsVisible = clients.some((client) => client.visibilityState === 'visible');
+    const options = {
+      body: payload.body || 'Un contacto de confianza necesita tu atención.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      // When Atent is visible, its in-app alert MP3 provides the sound. Keep
+      // the system sound for background/locked delivery to avoid two sounds.
+      silent: appIsVisible,
+      tag: data.alertId
+        ? `atent-emergency-${data.alertId}${data.repeat ? `-${data.repeatCount || Date.now()}` : ''}`
+        : undefined,
+      renotify: Boolean(data.alertId),
+      data: {
+        alertId: data.alertId || null,
+        url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/'),
+      },
+    };
+    await self.registration.showNotification(payload.title || 'Alerta de Atent', options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
