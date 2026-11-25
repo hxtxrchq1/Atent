@@ -66,15 +66,39 @@ export async function getWebPushSubscriptionState(): Promise<'enabled' | 'not-en
   }
 }
 
-export async function sendWebPushTest(sessionToken: string): Promise<void> {
+export async function sendWebPushTest(sessionToken: string, onStatus?: (status: 'queued' | 'sent' | 'failed') => void): Promise<void> {
   const registration = await navigator.serviceWorker.getRegistration('/');
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) throw new Error('Este iPhone todavía no tiene una suscripción Push activa.');
-  const { error } = await supabase.rpc('send_web_push_test_session', {
+  const { data, error } = await supabase.rpc('send_web_push_test_session', {
     p_session_token: sessionToken,
     p_endpoint: subscription.endpoint,
   });
   if (error) throw new Error(`No se pudo enviar la notificación de prueba: ${error.message}`);
+  const requestId = Number(data?.request_id || 0);
+  if (!requestId) throw new Error('El servidor no devolvió el identificador de la prueba.');
+  onStatus?.('queued');
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    const { data: status, error: statusError } = await supabase.rpc('get_web_push_test_status_session', {
+      p_session_token: sessionToken,
+      p_request_id: requestId,
+    });
+    if (statusError) throw new Error(`No se pudo verificar el resultado de Push: ${statusError.message}`);
+    if (status?.status === 'sent') {
+      onStatus?.('sent');
+      return;
+    }
+    if (status?.status === 'failed') {
+      onStatus?.('failed');
+      if (status.http_status === 404 || status.http_status === 410) {
+        await subscription.unsubscribe().catch(() => false);
+        throw new Error('Apple ya no reconoce esta suscripción Push. Vuelve a permitir las notificaciones en Atent.');
+      }
+      throw new Error(`El servicio Push rechazó la prueba (HTTP ${status.http_status || 'desconocido'}).`);
+    }
+  }
+  throw new Error('La solicitud se envió, pero no recibimos confirmación del servicio Push en 12 segundos.');
 }
 
 export async function disableWebPush(sessionToken: string): Promise<void> {
@@ -102,7 +126,8 @@ function getEmergencyAudioContext(): AudioContext | null {
 }
 
 export function isEmergencySoundEnabled(): boolean {
-  return localStorage.getItem(SOUND_PREFERENCE) === 'true';
+  const savedPreference = localStorage.getItem(SOUND_PREFERENCE);
+  return savedPreference === 'true' || (savedPreference === null && getClientPlatform().startsWith('ios-'));
 }
 
 export async function setEmergencySoundEnabled(enabled: boolean): Promise<void> {
@@ -127,6 +152,7 @@ export async function playEmergencySound(test = false): Promise<void> {
   const context = getEmergencyAudioContext();
   if (!context) return;
   await context.resume().catch(() => undefined);
+  if (context.state !== 'running') return;
   const startAt = context.currentTime + 0.03;
   const count = test ? 1 : 4;
   for (let index = 0; index < count; index += 1) {
@@ -143,6 +169,11 @@ export async function playEmergencySound(test = false): Promise<void> {
     oscillator.start(at);
     oscillator.stop(at + 0.25);
   }
+}
+
+export function unlockEmergencyAudio(): void {
+  const context = getEmergencyAudioContext();
+  if (context?.state === 'suspended') void context.resume().catch(() => undefined);
 }
 
 export function vibrateForEmergency(): void {

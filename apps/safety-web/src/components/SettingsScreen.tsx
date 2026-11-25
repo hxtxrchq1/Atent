@@ -40,6 +40,7 @@ export function SettingsScreen({
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushTestBusy, setPushTestBusy] = useState(false);
+  const [pushTestStatus, setPushTestStatus] = useState<'idle' | 'queued' | 'sent' | 'failed'>('idle');
   const [soundEnabled, setSoundEnabled] = useState(isEmergencySoundEnabled);
   const [vibrationEnabled, setVibrationEnabled] = useState(isEmergencyVibrationEnabled);
   const [focusGuideOpen, setFocusGuideOpen] = useState(false);
@@ -86,11 +87,13 @@ export function SettingsScreen({
       return;
     }
     setPushTestBusy(true);
+    setPushTestStatus('queued');
     try {
-      await sendWebPushTest(currentUser.web_session_token);
+      await sendWebPushTest(currentUser.web_session_token, setPushTestStatus);
       await getWebPushSubscriptionState().then((state) => setPushEnabled(state === 'enabled'));
-      showToast('Prueba enviada. Bloquea el iPhone durante unos segundos para confirmar el sonido.');
+      showToast('Apple aceptó la notificación de prueba. El sonido depende de los ajustes de iOS para Atent.');
     } catch (error) {
+      setPushTestStatus('failed');
       showToast(error instanceof Error ? error.message : 'No se pudo enviar la notificación de prueba.');
     } finally {
       setPushTestBusy(false);
@@ -320,7 +323,7 @@ export function SettingsScreen({
               </button>
               {pushEnabled && (
                 <button type="button" disabled={pushTestBusy || !currentUser?.web_session_token} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, minHeight: 44, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
-                  {pushTestBusy ? 'Enviando prueba…' : 'Probar notificación'}
+                  {pushTestBusy ? pushTestStatus === 'queued' ? 'Esperando confirmación de Apple…' : 'Enviando prueba…' : 'Probar notificación'}
                 </button>
               )}
             </>
@@ -328,15 +331,16 @@ export function SettingsScreen({
         </div>
 
         <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
-          <strong style={{ color: '#F8F5F8' }}>Sonido y vibración mientras Atent está abierta</strong>
+          <strong style={{ color: '#F8F5F8' }}>Sonido mientras Atent está abierta</strong>
           <button type="button" role="switch" aria-checked={soundEnabled} onClick={() => void handleSoundToggle()} style={{ width: '100%', minHeight: 44, marginTop: 8, padding: 11, backgroundColor: soundEnabled ? '#2A1820' : '#09080D', color: soundEnabled ? '#FF83B9' : '#DDD6E3', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, textAlign: 'left' }}>
             Sonido de alerta en la app: {soundEnabled ? 'Activado' : 'Desactivado'}
           </button>
           <button type="button" disabled={!isEmergencyVibrationSupported()} role="switch" aria-checked={vibrationEnabled && isEmergencyVibrationSupported()} onClick={handleVibrationToggle} style={{ width: '100%', minHeight: 44, marginTop: 8, padding: 11, backgroundColor: '#09080D', color: isEmergencyVibrationSupported() ? '#DDD6E3' : '#827B88', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, textAlign: 'left', opacity: isEmergencyVibrationSupported() ? 1 : 0.72 }}>
             Vibración: {isEmergencyVibrationSupported() ? (vibrationEnabled ? 'Activada' : 'Desactivada') : 'La controla iOS'}
           </button>
-          {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Safari no expone vibración a la PWA. iOS aplica sus ajustes de sonido y respuesta háptica a las notificaciones.</p>}
+          {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Una PWA no puede mantener vibración repetida hasta abrir Alertas. iOS controla la vibración de cada notificación desde Ajustes.</p>}
           {soundEnabled && <button type="button" onClick={() => void playEmergencySound(true)} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
+          <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent en segundo plano o el iPhone bloqueado, el sonido estándar de la notificación depende de Ajustes → Notificaciones → Atent → Sonidos, el modo silencio y Enfoque. La PWA no puede elegir un tono propio ni insistir hasta que abras Alertas.</p>
         </div>
 
         {isIos ? (

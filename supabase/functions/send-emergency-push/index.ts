@@ -79,13 +79,25 @@ Deno.serve(async (request) => {
       webpush.setVapidDetails(subject, publicKey, privateKey);
       try {
         await webpush.sendNotification(target.subscription, JSON.stringify({
-          title: 'Atent: prueba de sonido',
-          body: 'Si recibes este aviso, las notificaciones de Atent están activas en este iPhone.',
+          title: 'Atent: prueba de notificación',
+          body: 'Confirma que iOS muestre este aviso y aplique el sonido permitido para Atent.',
           data: { url: '/?push-test=1' },
         }), { TTL: 60 });
+        const testRequestId = Number(payload.test_request_id || 0);
+        if (testRequestId) {
+          await supabase.from('web_push_test_requests').update({
+            status: 'sent', http_status: 201, completed_at: new Date().toISOString(),
+          }).eq('id', testRequestId).eq('user_id', userId);
+        }
         return json({ sent: 1 });
       } catch (error) {
         const status = Number((error as { statusCode?: number }).statusCode || 0);
+        const testRequestId = Number(payload.test_request_id || 0);
+        if (testRequestId) {
+          await supabase.from('web_push_test_requests').update({
+            status: 'failed', http_status: status || null, completed_at: new Date().toISOString(),
+          }).eq('id', testRequestId).eq('user_id', userId);
+        }
         if (status === 404 || status === 410) {
           await supabase.from('web_push_subscriptions')
             .update({ revoked_at: new Date().toISOString() }).eq('id', target.id);

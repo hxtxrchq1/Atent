@@ -16,7 +16,7 @@ import { ContactsScreen, TrustedContact, ContactRequest } from './components/Con
 import { SosDragCancelButton } from './components/SosDragCancelButton';
 import { supabase } from './supabaseClient';
 import { AvailableUpdate, checkForLatestUpdate } from './update-checker';
-import { disableWebPush, getClientPlatform, playEmergencySound, vibrateForEmergency } from './pwa';
+import { disableWebPush, getClientPlatform, playEmergencySound, unlockEmergencyAudio, vibrateForEmergency } from './pwa';
 
 export function DesignShowcaseApp() {
   const tokens = ATENT_TOKENS;
@@ -68,6 +68,15 @@ export function DesignShowcaseApp() {
 
   const [activeTab, setActiveTab] = useState<'home' | 'location' | 'contacts' | 'alerts' | 'settings'>('home');
 
+  useEffect(() => {
+    if (!currentUser?.id || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('alert')) return;
+    setActiveTab('alerts');
+    setCurrentScreen('alerts');
+    window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`);
+  }, [currentUser?.id]);
+
   // Personaje y Estado Emocional
   const [characterMood, setCharacterMood] = useState<CharacterMood>(() => currentUser?.avatar_url || 'FELIZ');
   const [characterSpeech, setCharacterSpeech] = useState<string | null>('Estoy aquí para acompañarte');
@@ -97,9 +106,40 @@ export function DesignShowcaseApp() {
 
   // ALERTAS DE CONTACTOS (Requisito 8)
   const [alerts, setAlerts] = useState<EmergencyAlertItem[]>([]);
+  const [iosAlertToAcknowledge, setIosAlertToAcknowledge] = useState<string | null>(null);
   const [isRefreshingAlerts, setIsRefreshingAlerts] = useState(false);
   const [selectedAlertForDetail, setSelectedAlertForDetail] = useState<EmergencyAlertItem | null>(null);
   const notifiedAlertIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isIosClient || currentScreen === 'alerts') {
+      if (currentScreen === 'alerts') setIosAlertToAcknowledge(null);
+      return;
+    }
+    if (!iosAlertToAcknowledge) return;
+    const soundInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void playEmergencySound();
+    }, 2600);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void playEmergencySound();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(soundInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isIosClient, currentScreen, iosAlertToAcknowledge]);
+
+  useEffect(() => {
+    if (!isIosClient) return;
+    const unlockAudio = () => unlockEmergencyAudio();
+    document.addEventListener('pointerdown', unlockAudio, { passive: true });
+    document.addEventListener('touchstart', unlockAudio, { passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+  }, [isIosClient]);
 
   // UBICACIÓN REAL (Requisito 3)
   const [realLocation, setRealLocation] = useState<{
@@ -375,6 +415,7 @@ export function DesignShowcaseApp() {
     );
     if (newActiveAlert && (isIosClient || currentScreen !== 'alerts')) {
       notifiedAlertIdsRef.current.add(newActiveAlert.id);
+      if (isIosClient && currentScreenRef.current !== 'alerts') setIosAlertToAcknowledge(newActiveAlert.id);
       window.AndroidBridge?.showIncomingEmergencyAlert?.(newActiveAlert.owner_name);
       if (isIosClient && document.visibilityState === 'visible') {
         setCharacterMood('ENOJADO');
@@ -388,6 +429,7 @@ export function DesignShowcaseApp() {
       for (const alert of nextAlerts) {
         if (alert.status !== 'active') notifiedAlertIdsRef.current.add(alert.id);
       }
+      setIosAlertToAcknowledge((current) => current && nextAlerts.some((alert) => alert.id === current && alert.status === 'active') ? current : null);
     }
   };
 

@@ -29,7 +29,7 @@ La instalación y la recepción de Web Push en iPhone requieren abrir la PWA des
 - Vercel: usar `apps/safety-web` como raíz del proyecto, comando `npm run build`, output `dist`; el `vercel.json` local configura fallback SPA, MIME/caché del Service Worker y cabeceras.
 - El Service Worker usa ámbito `/`, mantiene solo shell/archivos estáticos en caché y excluye API y respuestas autenticadas.
 - El viewport usa el alto dinámico del iPhone, respeta el área segura y reduce el SOS/contenido en pantallas compactas para mantener visible la navegación.
-- El sonido en primer plano se activa desde Ajustes y necesita un toque inicial para habilitar audio web. Safari iOS no implementa `navigator.vibrate()`; las notificaciones en segundo plano siguen los ajustes de sonido/háptica de iOS.
+- El sonido dentro de Atent solo puede repetirse cuando la PWA está en primer plano; se detiene al abrir Alertas. Safari iOS no implementa `navigator.vibrate()`. En segundo plano iOS decide sonido y háptica de cada Push desde sus ajustes; una PWA no puede forzar tono personalizado ni vibración recurrente.
 - iOS no ofrece a una PWA una API pública para abrir directamente Enfoque o agregarse a su lista permitida. Atent muestra pasos breves dentro de Ajustes.
 - Ubicación: se etiqueta como última ubicación conocida con precisión y hora; no hay promesa de seguimiento continuo cuando iOS suspende la app.
 
@@ -37,7 +37,7 @@ La instalación y la recepción de Web Push en iPhone requieren abrir la PWA des
 
 El cliente contiene el flujo de permiso iniciado por botón, suscripción VAPID, alta y revocación por RPC. El login telefónico existente no usa Supabase Auth, así que la migración `infrastructure/supabase_migration_v13_pwa_sessions.sql` emite un token opaco de 30 días al iniciar sesión. La base de datos guarda solo su hash; los RPC Push verifican el token, sin volver a pedir la contraseña al activar el permiso.
 
-Las migraciones de suscripción, permisos, prueba y sesión PWA ya se aplicaron en el proyecto Supabase `atent-production`. El emisor existente despacha FCM y Web Push a los mismos contactos; Android conserva el envío FCM existente y se eliminan endpoints Web Push 404/410. La prueba de sonido se limita a la suscripción perteneciente a la sesión actual. Vercel necesita `VITE_VAPID_PUBLIC_KEY` para compilar; Supabase Edge Functions necesita la privada y el subject. No debe usarse la clave `service_role` en el navegador. El cliente por sí solo no envía alertas.
+Las migraciones de suscripción, permisos, prueba y sesión PWA ya se aplicaron en el proyecto Supabase `atent-production`. El emisor existente despacha FCM y Web Push a los mismos contactos; Android conserva el envío FCM existente y se eliminan endpoints Web Push 404/410. La prueba Push espera que el servidor confirme aceptación y registra estado/errores; esto no confirma que el iPhone haya emitido sonido. Vercel necesita `VITE_VAPID_PUBLIC_KEY` para compilar; Supabase Edge Functions necesita la privada y el subject. No debe usarse la clave `service_role` en el navegador. El cliente por sí solo no envía alertas.
 
 La clave pública está en la configuración de Vercel y la privada solo en los secretos de Supabase. La clave privada nunca va al frontend.
 
