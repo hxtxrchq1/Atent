@@ -1,7 +1,7 @@
 {
-  "version": "1.10.0",
-  "title": "Atent 1.10.0",
+  "version": "2.0",
+  "title": "Atent 2.0",
   "notes": "Se limpiaron los ajustes Android para ocultar instrucciones exclusivas de iPhone y web push.",
-  "releaseUrl": "https://github.com/hxtxrchq1/Atent/releases/tag/v1.10.0",
-  "downloadUrl": "https://github.com/hxtxrchq1/Atent/releases/download/v1.10.0/Atent-v1.10.0-debug.apk"
+  "releaseUrl": "https://github.com/hxtxrchq1/Atent/releases/tag/v2.0",
+  "downloadUrl": "https://github.com/hxtxrchq1/Atent/releases/download/v2.0/Atent-v2.0-debug.apk"
 }
