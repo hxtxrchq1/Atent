@@ -148,16 +148,17 @@ export function setEmergencyVibrationEnabled(enabled: boolean): void {
   localStorage.setItem(VIBRATION_PREFERENCE, String(enabled));
 }
 
-export async function playEmergencySound(test = false): Promise<boolean> {
+export async function playEmergencySound(test = false, repeat = false): Promise<boolean> {
   if (!test && !isEmergencySoundEnabled()) return false;
 
   // Start a real media file synchronously before awaiting anything. Safari's
   // user-activation gate is more reliable for HTMLAudioElement.play() than a
   // Web Audio source scheduled after an async AudioContext.resume().
   try {
-    emergencyAudioElement ??= new Audio('/sounds/atent-alert.wav');
+    emergencyAudioElement ??= new Audio('/sounds/alert_sound.mp3');
     emergencyAudioElement.preload = 'auto';
     emergencyAudioElement.volume = 1;
+    emergencyAudioElement.loop = repeat;
     emergencyAudioElement.currentTime = 0;
     await emergencyAudioElement.play();
     return true;
@@ -192,9 +193,16 @@ export async function playEmergencySound(test = false): Promise<boolean> {
   }
 }
 
+export function stopEmergencySound(): void {
+  if (!emergencyAudioElement) return;
+  emergencyAudioElement.loop = false;
+  emergencyAudioElement.pause();
+  emergencyAudioElement.currentTime = 0;
+}
+
 export function unlockEmergencyAudio(): void {
   try {
-    emergencyAudioElement ??= new Audio('/sounds/atent-alert.wav');
+    emergencyAudioElement ??= new Audio('/sounds/alert_sound.mp3');
     emergencyAudioElement.preload = 'auto';
     // Prime Safari's media pipeline during the user's tap. Playback begins
     // only when the user requests a test or an alert is received.

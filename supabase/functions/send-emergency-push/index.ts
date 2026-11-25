@@ -105,6 +105,90 @@ Deno.serve(async (request) => {
         return json({ error: 'WEB_PUSH_TEST_FAILED', status }, status === 404 || status === 410 ? 410 : 502);
       }
     }
+    if (payload.type === 'RETRY_ACTIVE_IOS_PUSH') {
+      const { data: reminders, error: reminderError } = await supabase.rpc('claim_due_ios_web_push_reminders', { p_limit: 100 });
+      if (reminderError) throw reminderError;
+      if (!reminders?.length) return json({ processed: 0, sent: 0, failed: 0, stopped: 0 });
+
+      const alertIds = [...new Set(reminders.map((item: { alert_id: string }) => item.alert_id))];
+      const recipientIds = [...new Set(reminders.map((item: { recipient_user_id: string }) => item.recipient_user_id))];
+      const [{ data: alerts, error: alertError }, { data: subscriptions, error: subscriptionError }] = await Promise.all([
+        supabase.from('emergency_alerts')
+          .select('id, owner_user_id, recipient_user_id, direct_alert_expires_at')
+          .eq('status', 'active').in('id', alertIds),
+        supabase.from('web_push_subscriptions')
+          .select('id, user_id, endpoint, subscription')
+          .eq('platform', 'ios-pwa').in('user_id', recipientIds).is('revoked_at', null),
+      ]);
+      if (alertError) throw alertError;
+      if (subscriptionError) throw subscriptionError;
+
+      const ownerIds = [...new Set((alerts ?? []).map((alert) => alert.owner_user_id))];
+      const { data: profiles, error: profileError } = await supabase.from('profiles')
+        .select('id, display_name').in('id', ownerIds.length ? ownerIds : ['00000000-0000-0000-0000-000000000000']);
+      if (profileError) throw profileError;
+
+      const alertById = new Map((alerts ?? []).map((alert) => [alert.id, alert]));
+      const nameById = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
+      const subscriptionsByUser = new Map<string, typeof subscriptions>();
+      for (const subscription of subscriptions ?? []) {
+        const current = subscriptionsByUser.get(subscription.user_id) ?? [];
+        current.push(subscription);
+        subscriptionsByUser.set(subscription.user_id, current);
+      }
+
+      const subject = Deno.env.get('VAPID_SUBJECT');
+      const publicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+      const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+      if (!subject || !publicKey || !privateKey) throw new Error('VAPID secrets are not configured');
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+
+      let sent = 0;
+      let failed = 0;
+      let stopped = 0;
+      for (const reminder of reminders) {
+        const alert = alertById.get(reminder.alert_id);
+        const directExpired = alert?.direct_alert_expires_at && new Date(alert.direct_alert_expires_at).getTime() <= Date.now();
+        if (!alert || directExpired) {
+          await supabase.from('ios_web_push_reminders').update({ stopped_at: new Date().toISOString() })
+            .eq('alert_id', reminder.alert_id).eq('recipient_user_id', reminder.recipient_user_id);
+          stopped += 1;
+          continue;
+        }
+
+        const targets = subscriptionsByUser.get(reminder.recipient_user_id) ?? [];
+        if (targets.length === 0) {
+          await supabase.from('ios_web_push_reminders').update({ stopped_at: new Date().toISOString() })
+            .eq('alert_id', reminder.alert_id).eq('recipient_user_id', reminder.recipient_user_id);
+          stopped += 1;
+          continue;
+        }
+
+        const message = JSON.stringify({
+          title: '🚨 Atent: alerta pendiente',
+          body: `${nameById.get(alert.owner_user_id) || 'Tu contacto de confianza'} todavía necesita tu atención. Abre Atent y revisa Alertas.`,
+          data: {
+            alertId: String(alert.id),
+            alertType: alert.recipient_user_id ? 'DIRECT' : 'SOS',
+            repeat: true,
+            url: `/?alert=${encodeURIComponent(String(alert.id))}`,
+          },
+        });
+        for (const target of targets) {
+          try {
+            await webpush.sendNotification(target.subscription, message, { TTL: 90 });
+            sent += 1;
+          } catch (error) {
+            failed += 1;
+            const status = Number((error as { statusCode?: number }).statusCode || 0);
+            if (status === 404 || status === 410) {
+              await supabase.from('web_push_subscriptions').update({ revoked_at: new Date().toISOString() }).eq('id', target.id);
+            }
+          }
+        }
+      }
+      return json({ processed: reminders.length, sent, failed, stopped });
+    }
     const record = payload.record ?? payload;
     if (payload.type && payload.type !== 'INSERT') return json({ ignored: true });
     if (!record.id || !record.owner_user_id || record.status !== 'active') return json({ ignored: true });
@@ -158,7 +242,7 @@ Deno.serve(async (request) => {
 
     const { data: webTargets, error: webTargetError } = await supabase
       .from('web_push_subscriptions')
-      .select('id, subscription')
+      .select('id, user_id, endpoint, subscription, platform')
       .in('user_id', recipientIds)
       .is('revoked_at', null);
     if (webTargetError) throw webTargetError;
@@ -173,6 +257,18 @@ Deno.serve(async (request) => {
         throw new Error('VAPID secrets are not configured');
       }
       webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+      const iosRecipientIds = [...new Set((webTargets ?? [])
+        .filter((target) => target.platform === 'ios-pwa')
+        .map((target) => target.user_id))];
+      if (iosRecipientIds.length > 0) {
+        const { error: scheduleError } = await supabase.from('ios_web_push_reminders').upsert(
+          iosRecipientIds.map((recipient_user_id) => ({
+            alert_id: String(record.id), recipient_user_id, next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
+          })),
+          { onConflict: 'alert_id,recipient_user_id', ignoreDuplicates: true },
+        );
+        if (scheduleError) throw scheduleError;
+      }
       const message = JSON.stringify({
         title: '🚨 Alerta de Atent',
         body: `${ownerName} necesita tu atención.`,

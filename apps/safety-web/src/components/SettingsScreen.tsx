@@ -345,7 +345,7 @@ export function SettingsScreen({
           </button>
           {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Una PWA no puede mantener vibración repetida hasta abrir Alertas. iOS controla la vibración de cada notificación desde Ajustes.</p>}
           {soundEnabled && <button type="button" onClick={() => void handleSoundTest()} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
-          <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent en segundo plano o el iPhone bloqueado, el sonido estándar de la notificación depende de Ajustes → Notificaciones → Atent → Sonidos, el modo silencio y Enfoque. La PWA no puede elegir un tono propio ni insistir hasta que abras Alertas.</p>
+          <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Con Atent suspendida, el servidor repite la notificación de iOS cada minuto (las primeras 5 veces) y luego cada 5 minutos, hasta que abras Alertas o termine la emergencia. iOS decide si cada aviso suena; la PWA no puede poner el MP3 de Android como sonido del sistema.</p>
         </div>
 
         {isIos ? (

@@ -1,5 +1,5 @@
-const CACHE_NAME = 'atent-shell-v2';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/sounds/atent-alert.wav'];
+const CACHE_NAME = 'atent-shell-v4';
+const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/sounds/alert_sound.mp3'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -42,7 +42,7 @@ self.addEventListener('push', (event) => {
     badge: '/icons/icon-192.png',
     silent: false,
     tag: data.alertId ? `atent-emergency-${data.alertId}` : undefined,
-    renotify: false,
+    renotify: Boolean(data.alertId),
     data: { url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/') },
   };
   event.waitUntil(self.registration.showNotification(payload.title || 'Alerta de Atent', options));

@@ -16,7 +16,7 @@ import { ContactsScreen, TrustedContact, ContactRequest } from './components/Con
 import { SosDragCancelButton } from './components/SosDragCancelButton';
 import { supabase } from './supabaseClient';
 import { AvailableUpdate, checkForLatestUpdate } from './update-checker';
-import { disableWebPush, getClientPlatform, playEmergencySound, unlockEmergencyAudio, vibrateForEmergency } from './pwa';
+import { disableWebPush, getClientPlatform, playEmergencySound, stopEmergencySound, unlockEmergencyAudio, vibrateForEmergency } from './pwa';
 
 export function DesignShowcaseApp() {
   const tokens = ATENT_TOKENS;
@@ -110,23 +110,46 @@ export function DesignShowcaseApp() {
   const [isRefreshingAlerts, setIsRefreshingAlerts] = useState(false);
   const [selectedAlertForDetail, setSelectedAlertForDetail] = useState<EmergencyAlertItem | null>(null);
   const notifiedAlertIdsRef = useRef<Set<string>>(new Set());
+  const activeAlertIdsForAcknowledgement = alerts
+    .filter((alert) => alert.status === 'active')
+    .map((alert) => alert.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!isIosClient || currentScreen !== 'alerts' || !currentUser?.web_session_token || !activeAlertIdsForAcknowledgement) return;
+    const acknowledgeAlerts = () => {
+      void supabase.rpc('acknowledge_ios_web_push_alerts_session', {
+        p_session_token: currentUser.web_session_token,
+        p_alert_ids: activeAlertIdsForAcknowledgement.split(','),
+      });
+    };
+    acknowledgeAlerts();
+    const retryAck = window.setInterval(acknowledgeAlerts, 20_000);
+    return () => window.clearInterval(retryAck);
+  }, [isIosClient, currentScreen, currentUser?.web_session_token, activeAlertIdsForAcknowledgement]);
 
   useEffect(() => {
     if (!isIosClient || currentScreen === 'alerts') {
       if (currentScreen === 'alerts') setIosAlertToAcknowledge(null);
+      stopEmergencySound();
       return;
     }
-    if (!iosAlertToAcknowledge) return;
-    const soundInterval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void playEmergencySound();
-    }, 2600);
+    if (!iosAlertToAcknowledge) {
+      stopEmergencySound();
+      return;
+    }
+    const playLoopWhenVisible = () => {
+      if (document.visibilityState === 'visible') void playEmergencySound(false, true);
+    };
+    playLoopWhenVisible();
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void playEmergencySound();
+      if (document.visibilityState === 'visible') playLoopWhenVisible();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      window.clearInterval(soundInterval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      stopEmergencySound();
     };
   }, [isIosClient, currentScreen, iosAlertToAcknowledge]);
 
