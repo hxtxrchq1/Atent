@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterMood, MOOD_IMAGES, VectorIcon } from './AppCommon';
 import { supabase } from '../supabaseClient';
+import { disableWebPush, enableWebPush, getClientPlatform, getPushSupport } from '../pwa';
 
 interface SettingsScreenProps {
   currentUser: any;
@@ -35,6 +36,36 @@ export function SettingsScreen({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const pushSupport = getPushSupport();
+  const [pushEnabled, setPushEnabled] = useState(() => Boolean(currentUser?.id && localStorage.getItem(`atent_web_push_enabled_${currentUser.id}`) === 'true'));
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushPassword, setPushPassword] = useState('');
+  const isIos = getClientPlatform().startsWith('ios-');
+
+  const handlePushToggle = async () => {
+    if (!pushPassword) {
+      showToast('Ingresa tu contraseña para confirmar este cambio.');
+      return;
+    }
+    setPushBusy(true);
+    try {
+      if (pushEnabled) {
+        await disableWebPush(currentUser.id, pushPassword);
+        if (currentUser?.id) localStorage.removeItem(`atent_web_push_enabled_${currentUser.id}`);
+        setPushEnabled(false);
+        showToast('Notificaciones desactivadas en este dispositivo.');
+      } else {
+        await enableWebPush(currentUser.id, pushPassword);
+        setPushEnabled(true);
+        showToast('Notificaciones activadas en este dispositivo.');
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No fue posible cambiar las notificaciones.');
+    } finally {
+      setPushBusy(false);
+      setPushPassword('');
+    }
+  };
 
   // Datos seguros del usuario con fallbacks
   const legalName = currentUser?.legal_name || 'Usuario';
@@ -201,7 +232,7 @@ export function SettingsScreen({
         </div>
       </div>
 
-      {/* SECCIÓN 2: AJUSTES DE ANDROID */}
+      {/* SECCIÓN 2: DISPOSITIVO Y NOTIFICACIONES */}
       <div
         style={{
           backgroundColor: '#1E1925',
@@ -215,7 +246,7 @@ export function SettingsScreen({
         </span>
 
         <p style={{ fontSize: '12px', color: '#AAA4B0', margin: '10px 0 14px 0', lineHeight: 1.4 }}>
-          Permisos de geolocalización satelital y lectura de agenda mediante el sistema nativo de tu teléfono.
+          Permisos del dispositivo, ubicación y notificaciones de Atent.
         </p>
 
         <button
@@ -225,6 +256,38 @@ export function SettingsScreen({
         >
           Ver guia rapida de Atent
         </button>
+
+        {getClientPlatform() === 'ios-safari' && (
+          <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
+            Para instalar Atent: en Safari toca Compartir → Añadir a pantalla de inicio y abre Atent desde el nuevo icono.
+          </div>
+        )}
+
+        <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: '#F8F5F8' }}>Notificaciones de Atent</strong>
+          <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? 'Actívalas para recibir alertas en este dispositivo.' : pushSupport.reason}</p>
+          {pushSupport.supported && (
+            <>
+              <label style={{ display: 'block', marginBottom: 8 }} htmlFor="push-account-password">Confirma tu contraseña de Atent</label>
+              <input id="push-account-password" type="password" autoComplete="current-password" value={pushPassword} onChange={(event) => setPushPassword(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: 11, backgroundColor: '#09080D', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10 }} />
+              <button type="button" disabled={pushBusy || !pushPassword} onClick={() => void handlePushToggle()} style={{ width: '100%', padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !pushPassword ? 0.7 : 1 }}>
+                {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Activar notificaciones'}
+              </button>
+            </>
+          )}
+        </div>
+
+        {isIos ? (
+          <div style={{ padding: 14, backgroundColor: '#1E1925', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.55 }}>
+            <strong style={{ color: '#F8F5F8' }}>Enfoque y No molestar en iOS</strong>
+            <p style={{ margin: '6px 0 0' }}>En Ajustes → Notificaciones → Atent, permite notificaciones y sonidos. En Ajustes → Enfoque, añade Atent a las apps permitidas para cada modo si deseas recibir avisos durante ese Enfoque. iOS puede silenciar o retrasar notificaciones según tus ajustes, conexión y estado del dispositivo. La PWA no puede activar No molestar ni usar las Critical Alerts de apps nativas.</p>
+          </div>
+        ) : (
+          <div style={{ padding: 14, backgroundColor: '#2A1820', border: '1px solid #FF304F', borderRadius: 12, display: 'flex', gap: 12 }}>
+            <VectorIcon name="alert-triangle" size={20} color="#FF83B9" />
+            <div><strong style={{ fontSize: 13 }}>Alertas durante No molestar</strong><p style={{ color: '#DDD6E3', fontSize: 12, margin: '4px 0 0' }}>Configura manualmente en Android el acceso especial de Atent. La entrega depende de los ajustes del sistema.</p></div>
+          </div>
+        )}
 
         <button
           type="button"

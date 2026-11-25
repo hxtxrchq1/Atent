@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import webpush from 'npm:web-push@3.6.7';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -83,31 +84,81 @@ Deno.serve(async (request) => {
     if (profileError) throw profileError;
 
     const targets = (devices ?? []).filter((device) => Boolean(device.push_token));
-    if (targets.length === 0) return json({ attempted: 0, sent: 0, failed: 0, reason: 'NO_REGISTERED_PUSH_TOKENS' });
-
-    const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')!);
-    const accessToken = await googleAccessToken(serviceAccount);
     const ownerName = ownerProfile?.display_name || 'Tu contacto de confianza';
-    let sent = 0;
-    const failureStatuses: number[] = [];
-    for (const device of targets) {
-      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ message: {
-          token: device.push_token,
-          // Data-only, high-priority delivery wakes the native Firebase service
-          // when the Activity/WebView is closed or backgrounded.
-          data: { alertId: String(record.id), ownerName, alertType: record.recipient_user_id ? 'DIRECT' : 'SOS' },
-          android: { priority: 'HIGH', ttl: '600s' },
-        } }),
-      });
-      if (response.ok) sent += 1;
-      else failureStatuses.push(response.status);
+    let fcmSent = 0;
+    const fcmFailureStatuses: number[] = [];
+    if (targets.length > 0) {
+      try {
+        const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')!);
+        const accessToken = await googleAccessToken(serviceAccount);
+        for (const device of targets) {
+          const response = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ message: {
+              token: device.push_token,
+              // Preserve the existing Android data-only high-priority delivery.
+              data: { alertId: String(record.id), ownerName, alertType: record.recipient_user_id ? 'DIRECT' : 'SOS' },
+              android: { priority: 'HIGH', ttl: '600s' },
+            } }),
+          });
+          if (response.ok) fcmSent += 1;
+          else fcmFailureStatuses.push(response.status);
+        }
+      } catch {
+        fcmFailureStatuses.push(0);
+      }
     }
-    return json({ attempted: targets.length, sent, failed: failureStatuses.length, failureStatuses });
+
+    const { data: webTargets, error: webTargetError } = await supabase
+      .from('web_push_subscriptions')
+      .select('id, subscription')
+      .in('user_id', recipientIds)
+      .is('revoked_at', null);
+    if (webTargetError) throw webTargetError;
+
+    let webSent = 0;
+    const webFailureStatuses: number[] = [];
+    if ((webTargets ?? []).length > 0) {
+      const vapidSubject = Deno.env.get('VAPID_SUBJECT');
+      const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+      const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+      if (!vapidSubject || !vapidPublicKey || !vapidPrivateKey) {
+        throw new Error('VAPID secrets are not configured');
+      }
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+      const message = JSON.stringify({
+        title: '🚨 Alerta de Atent',
+        body: `${ownerName} necesita tu atención.`,
+        data: {
+          alertId: String(record.id),
+          alertType: record.recipient_user_id ? 'DIRECT' : 'SOS',
+          url: `/?alert=${encodeURIComponent(String(record.id))}`,
+        },
+      });
+      for (const target of webTargets ?? []) {
+        try {
+          await webpush.sendNotification(target.subscription, message, { TTL: 600 });
+          webSent += 1;
+        } catch (error) {
+          const status = Number((error as { statusCode?: number }).statusCode || 0);
+          webFailureStatuses.push(status);
+          if (status === 404 || status === 410) {
+            await supabase.from('web_push_subscriptions')
+              .update({ revoked_at: new Date().toISOString() })
+              .eq('id', target.id);
+          }
+        }
+      }
+    }
+
+    return json({
+      fcm: { attempted: targets.length, sent: fcmSent, failed: fcmFailureStatuses.length, failureStatuses: fcmFailureStatuses },
+      webPush: { attempted: webTargets?.length ?? 0, sent: webSent, failed: webFailureStatuses.length, failureStatuses: webFailureStatuses },
+    });
   } catch (error) {
     console.error('send-emergency-push failed', error instanceof Error ? error.message : 'unknown');
     return json({ error: 'PUSH_DISPATCH_FAILED' }, 500);
   }
 });
+

@@ -16,9 +16,11 @@ import { ContactsScreen, TrustedContact, ContactRequest } from './components/Con
 import { SosDragCancelButton } from './components/SosDragCancelButton';
 import { supabase } from './supabaseClient';
 import { AvailableUpdate, checkForLatestUpdate } from './update-checker';
+import { getClientPlatform } from './pwa';
 
 export function DesignShowcaseApp() {
   const tokens = ATENT_TOKENS;
+  const isIosClient = getClientPlatform().startsWith('ios-');
 
   // Local storage keys
   const STORAGE_KEY_AUTH = 'atent_auth_user_v2';
@@ -951,7 +953,7 @@ export function DesignShowcaseApp() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        minHeight: '100dvh',
         backgroundColor: '#09080D',
         color: '#F8F5F8',
         fontFamily: tokens.typography.fontFamily.base,
@@ -964,7 +966,7 @@ export function DesignShowcaseApp() {
         style={{
           width: '100%',
           maxWidth: '430px',
-          minHeight: '100vh',
+          minHeight: '100dvh',
           backgroundColor: '#09080D',
           display: 'flex',
           flexDirection: 'column',
@@ -1107,9 +1109,9 @@ export function DesignShowcaseApp() {
                   <div style={{ padding: '14px', backgroundColor: '#2A1820', borderRadius: '16px', border: '1px solid #FF304F', display: 'flex', gap: '12px' }}>
                     <VectorIcon name="alert-triangle" size={20} color="#FF83B9" />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px' }}>Alertas incluso con No molestar</div>
+                      <div style={{ fontWeight: 700, fontSize: '13px' }}>{isIosClient ? 'Notificaciones y modo Enfoque' : 'Alertas durante No molestar'}</div>
                       <div style={{ color: '#DDD6E3', fontSize: '12px', marginTop: '2px' }}>
-                        Android abrirá sus ajustes para que concedas manualmente este acceso especial.
+                        {isIosClient ? 'En Ajustes → Notificaciones permite los sonidos; en cada modo Enfoque agrega Atent a las apps permitidas. La PWA no admite Critical Alerts.' : 'Android abrirá sus ajustes para que concedas manualmente este acceso especial.'}
                       </div>
                     </div>
                   </div>
@@ -1389,7 +1391,8 @@ export function DesignShowcaseApp() {
         {!isAuthFlow && (
           <nav
             style={{
-              height: '62px',
+              height: 'calc(62px + env(safe-area-inset-bottom))',
+              paddingBottom: 'env(safe-area-inset-bottom)',
               backgroundColor: '#09080D',
               borderTop: '1px solid #201A29',
               display: 'flex',
