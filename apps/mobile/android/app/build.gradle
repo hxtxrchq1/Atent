@@ -17,7 +17,7 @@ android {
         // Nombre público de la primera versión; el código interno permite
         // actualizar instalaciones beta anteriores sin downgrade de Android.
         versionCode 16
-        versionName "1.10.0"
+        versionName "2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
