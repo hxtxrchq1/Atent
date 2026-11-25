@@ -29,7 +29,7 @@ export function getPushSupport(): { supported: boolean; reason?: string } {
   return { supported: true };
 }
 
-export async function enableWebPush(userId: string, password: string): Promise<void> {
+export async function enableWebPush(userId: string, sessionToken: string): Promise<void> {
   const support = getPushSupport();
   if (!support.supported) throw new Error(support.reason);
   const permission = await Notification.requestPermission();
@@ -41,16 +41,17 @@ export async function enableWebPush(userId: string, password: string): Promise<v
     userVisibleOnly: true,
     applicationServerKey: decodeBase64Url(import.meta.env.VITE_VAPID_PUBLIC_KEY),
   });
-  const { error } = await supabase.rpc('register_web_push_subscription', {
-    p_user_id: userId,
-    p_password: password,
+  const { error } = await supabase.rpc('register_web_push_subscription_session', {
+    p_session_token: sessionToken,
     p_endpoint: subscription.endpoint,
     p_subscription: subscription.toJSON(),
     p_platform: getClientPlatform(),
   });
   if (error) {
     if (!existingSubscription) await subscription.unsubscribe().catch(() => false);
-    throw new Error(`No fue posible registrar las notificaciones en tu cuenta: ${error.message}`);
+    throw new Error(error.message.includes('Web session expired')
+      ? 'Tu sesión de Atent venció. Cierra sesión e inicia nuevamente para activar notificaciones.'
+      : `No fue posible registrar las notificaciones en tu cuenta: ${error.message}`);
   }
   localStorage.setItem(`atent_web_push_enabled_${userId}`, 'true');
 }
@@ -65,29 +66,87 @@ export async function getWebPushSubscriptionState(): Promise<'enabled' | 'not-en
   }
 }
 
-export async function sendWebPushTest(userId: string, password: string): Promise<void> {
+export async function sendWebPushTest(sessionToken: string): Promise<void> {
   const registration = await navigator.serviceWorker.getRegistration('/');
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) throw new Error('Este iPhone todavía no tiene una suscripción Push activa.');
-  const { error } = await supabase.rpc('send_web_push_test', {
-    p_user_id: userId,
-    p_password: password,
+  const { error } = await supabase.rpc('send_web_push_test_session', {
+    p_session_token: sessionToken,
     p_endpoint: subscription.endpoint,
   });
   if (error) throw new Error(`No se pudo enviar la notificación de prueba: ${error.message}`);
 }
 
-export async function disableWebPush(userId: string, password: string): Promise<void> {
+export async function disableWebPush(sessionToken: string): Promise<void> {
   const registration = await navigator.serviceWorker.getRegistration('/');
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) return;
-  const { error } = await supabase.rpc('revoke_web_push_subscription', {
-    p_user_id: userId,
-    p_password: password,
+  const { error } = await supabase.rpc('revoke_web_push_subscription_session', {
+    p_session_token: sessionToken,
     p_endpoint: subscription.endpoint,
   });
-  if (error) throw new Error('No se pudo revocar el registro de notificaciones del servidor.');
+  if (error) throw new Error(error.message.includes('Web session expired')
+    ? 'Tu sesión de Atent venció. Cierra sesión e inicia nuevamente para cambiar notificaciones.'
+    : `No se pudo revocar el registro de notificaciones: ${error.message}`);
   await subscription.unsubscribe();
+}
+
+let emergencyAudioContext: AudioContext | null = null;
+const SOUND_PREFERENCE = 'atent_emergency_sound_enabled';
+const VIBRATION_PREFERENCE = 'atent_emergency_vibration_enabled';
+
+function getEmergencyAudioContext(): AudioContext | null {
+  if (!('AudioContext' in window)) return null;
+  emergencyAudioContext ??= new AudioContext();
+  return emergencyAudioContext;
+}
+
+export function isEmergencySoundEnabled(): boolean {
+  return localStorage.getItem(SOUND_PREFERENCE) === 'true';
+}
+
+export async function setEmergencySoundEnabled(enabled: boolean): Promise<void> {
+  localStorage.setItem(SOUND_PREFERENCE, String(enabled));
+  if (enabled) await playEmergencySound(true);
+}
+
+export function isEmergencyVibrationEnabled(): boolean {
+  return localStorage.getItem(VIBRATION_PREFERENCE) !== 'false';
+}
+
+export function isEmergencyVibrationSupported(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+}
+
+export function setEmergencyVibrationEnabled(enabled: boolean): void {
+  localStorage.setItem(VIBRATION_PREFERENCE, String(enabled));
+}
+
+export async function playEmergencySound(test = false): Promise<void> {
+  if (!test && !isEmergencySoundEnabled()) return;
+  const context = getEmergencyAudioContext();
+  if (!context) return;
+  await context.resume().catch(() => undefined);
+  const startAt = context.currentTime + 0.03;
+  const count = test ? 1 : 4;
+  for (let index = 0; index < count; index += 1) {
+    const at = startAt + index * 0.42;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(index % 2 === 0 ? 880 : 660, at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.16, at + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(at);
+    oscillator.stop(at + 0.25);
+  }
+}
+
+export function vibrateForEmergency(): void {
+  if (isEmergencyVibrationEnabled() && isEmergencyVibrationSupported()) navigator.vibrate([250, 120, 250, 120, 350]);
 }
 
 export function isIosInstallableBrowser(): boolean {

@@ -9,6 +9,15 @@ function hasControlCharacters(value: string): boolean {
   return /[\u0000-\u001F\u007F]/.test(value);
 }
 
+async function createPwaSession(userId: string, password: string): Promise<{ token: string; expires_at: string } | null> {
+  const { data, error } = await supabase.rpc('issue_pwa_session', {
+    p_user_id: userId,
+    p_password: password,
+  });
+  if (error || !data?.token) return null;
+  return data as { token: string; expires_at: string };
+}
+
 interface AuthScreensProps {
   onAuthSuccess: (userProfile: any) => void;
   onNavigateToLogin: () => void;
@@ -110,7 +119,8 @@ export function AuthScreens({
           return;
         }
 
-        onAuthSuccess({ ...rpcData.user, isNew: true });
+        const webSession = await createPwaSession(rpcData.user.id, regPassword);
+        onAuthSuccess({ ...rpcData.user, web_session_token: webSession?.token, web_session_expires_at: webSession?.expires_at, isNew: true });
         setIsLoading(false);
         return;
       }
@@ -182,7 +192,8 @@ export function AuthScreens({
           return;
         }
 
-        onAuthSuccess({ ...rpcData.user, isNew: false });
+        const webSession = await createPwaSession(rpcData.user.id, loginPassword);
+        onAuthSuccess({ ...rpcData.user, web_session_token: webSession?.token, web_session_expires_at: webSession?.expires_at, isNew: false });
         setIsLoading(false);
         return;
       }

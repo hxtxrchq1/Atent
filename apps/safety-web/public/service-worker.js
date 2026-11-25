@@ -40,6 +40,7 @@ self.addEventListener('push', (event) => {
     body: payload.body || 'Un contacto de confianza necesita tu atención.',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
+    silent: false,
     tag: data.alertId ? `atent-emergency-${data.alertId}` : undefined,
     renotify: false,
     data: { url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/') },

@@ -10,6 +10,7 @@ export type GestureMachineState =
 
 interface SosDragCancelButtonProps {
   isSosActive: boolean;
+  compact?: boolean;
   onEmergencyTriggered: () => Promise<void>;
   onCancelActiveEmergency: () => Promise<boolean>;
   onGestureStateChange?: (state: GestureMachineState) => void;
@@ -17,6 +18,7 @@ interface SosDragCancelButtonProps {
 
 export function SosDragCancelButton({
   isSosActive,
+  compact = false,
   onEmergencyTriggered,
   onCancelActiveEmergency,
   onGestureStateChange,
@@ -186,8 +188,8 @@ export function SosDragCancelButton({
     <div
       ref={containerRef}
       style={{
-        width: '280px',
-        height: '270px',
+        width: compact ? 'min(244px, 72vw)' : '280px',
+        height: compact ? 'clamp(214px, 32dvh, 238px)' : '270px',
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -249,8 +251,8 @@ export function SosDragCancelButton({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         style={{
-          width: '180px',
-          height: '180px',
+          width: compact ? 'min(164px, 46vw)' : '180px',
+          height: compact ? 'min(164px, 46vw)' : '180px',
           borderRadius: '50%',
           backgroundColor: isSosActive
             ? isOverTarget

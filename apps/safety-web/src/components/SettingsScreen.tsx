@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CharacterMood, MOOD_IMAGES, VectorIcon } from './AppCommon';
 import { supabase } from '../supabaseClient';
-import { disableWebPush, enableWebPush, getClientPlatform, getPushSupport, getWebPushSubscriptionState, sendWebPushTest } from '../pwa';
+import { disableWebPush, enableWebPush, getClientPlatform, getPushSupport, getWebPushSubscriptionState, sendWebPushTest, isEmergencySoundEnabled, setEmergencySoundEnabled, isEmergencyVibrationEnabled, isEmergencyVibrationSupported, setEmergencyVibrationEnabled, playEmergencySound } from '../pwa';
 
 interface SettingsScreenProps {
   currentUser: any;
@@ -40,7 +40,9 @@ export function SettingsScreen({
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushTestBusy, setPushTestBusy] = useState(false);
-  const [pushPassword, setPushPassword] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(isEmergencySoundEnabled);
+  const [vibrationEnabled, setVibrationEnabled] = useState(isEmergencyVibrationEnabled);
+  const [focusGuideOpen, setFocusGuideOpen] = useState(false);
   const isIos = getClientPlatform().startsWith('ios-');
 
   useEffect(() => {
@@ -54,19 +56,19 @@ export function SettingsScreen({
   }, [currentUser?.id]);
 
   const handlePushToggle = async () => {
-    if (!pushPassword) {
-      showToast('Ingresa tu contraseña para confirmar este cambio.');
+    if (!currentUser?.web_session_token) {
+      showToast('Cierra sesión e inicia nuevamente para actualizar la seguridad de esta sesión.');
       return;
     }
     setPushBusy(true);
     try {
       if (pushEnabled) {
-        await disableWebPush(currentUser.id, pushPassword);
+        await disableWebPush(currentUser.web_session_token);
         if (currentUser?.id) localStorage.removeItem(`atent_web_push_enabled_${currentUser.id}`);
         setPushEnabled(false);
         showToast('Notificaciones desactivadas en este dispositivo.');
       } else {
-        await enableWebPush(currentUser.id, pushPassword);
+        await enableWebPush(currentUser.id, currentUser.web_session_token);
         const state = await getWebPushSubscriptionState();
         setPushEnabled(state === 'enabled');
         showToast(state === 'enabled' ? 'Notificaciones activadas y registradas en este dispositivo.' : 'El navegador no confirmó la suscripción Push.');
@@ -75,26 +77,40 @@ export function SettingsScreen({
       showToast(error instanceof Error ? error.message : 'No fue posible cambiar las notificaciones.');
     } finally {
       setPushBusy(false);
-      setPushPassword('');
     }
   };
 
   const handlePushTest = async () => {
-    if (!pushPassword) {
-      showToast('Ingresa tu contraseña de Atent para confirmar la prueba.');
+    if (!currentUser?.web_session_token) {
+      showToast('Cierra sesión e inicia nuevamente para actualizar la seguridad de esta sesión.');
       return;
     }
     setPushTestBusy(true);
     try {
-      await sendWebPushTest(currentUser.id, pushPassword);
+      await sendWebPushTest(currentUser.web_session_token);
       await getWebPushSubscriptionState().then((state) => setPushEnabled(state === 'enabled'));
       showToast('Prueba enviada. Bloquea el iPhone durante unos segundos para confirmar el sonido.');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo enviar la notificación de prueba.');
     } finally {
       setPushTestBusy(false);
-      setPushPassword('');
     }
+  };
+
+  const handleSoundToggle = async () => {
+    const nextEnabled = !soundEnabled;
+    setSoundEnabled(nextEnabled);
+    await setEmergencySoundEnabled(nextEnabled);
+    showToast(nextEnabled ? 'Sonido de alertas activado. Escucha la prueba.' : 'Sonido de alertas desactivado.');
+  };
+
+  const handleVibrationToggle = () => {
+    if (!isEmergencyVibrationSupported()) return;
+    const nextEnabled = !vibrationEnabled;
+    setVibrationEnabled(nextEnabled);
+    setEmergencyVibrationEnabled(nextEnabled);
+    if (nextEnabled) navigator.vibrate([120, 70, 120]);
+    showToast(nextEnabled ? 'Vibración activada cuando este navegador la permita.' : 'Vibración desactivada.');
   };
 
   // Datos seguros del usuario con fallbacks
@@ -298,13 +314,12 @@ export function SettingsScreen({
           <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? (pushEnabled ? 'Este dispositivo tiene una suscripción Push activa.' : 'Activa el permiso del sistema y registra este dispositivo en tu cuenta.') : pushSupport.reason}</p>
           {pushSupport.supported && (
             <>
-              <label style={{ display: 'block', marginBottom: 8 }} htmlFor="push-account-password">Confirma tu contraseña de Atent</label>
-              <input id="push-account-password" type="password" autoComplete="current-password" value={pushPassword} onChange={(event) => setPushPassword(event.target.value)} style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: 11, backgroundColor: '#09080D', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10 }} />
-              <button type="button" disabled={pushBusy || !pushPassword} onClick={() => void handlePushToggle()} style={{ width: '100%', padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !pushPassword ? 0.7 : 1 }}>
-                {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Activar notificaciones'}
+              {!currentUser?.web_session_token && <p style={{ margin: '0 0 8px', color: '#FFB4CF' }}>Inicia sesión de nuevo una vez para vincular este dispositivo de forma segura.</p>}
+              <button type="button" disabled={pushBusy || !currentUser?.web_session_token} onClick={() => void handlePushToggle()} style={{ width: '100%', minHeight: 44, padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
+                {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Permitir notificaciones'}
               </button>
               {pushEnabled && (
-                <button type="button" disabled={pushTestBusy || !pushPassword} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !pushPassword ? 0.7 : 1 }}>
+                <button type="button" disabled={pushTestBusy || !currentUser?.web_session_token} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, minHeight: 44, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !currentUser?.web_session_token ? 0.7 : 1 }}>
                   {pushTestBusy ? 'Enviando prueba…' : 'Probar notificación'}
                 </button>
               )}
@@ -312,10 +327,24 @@ export function SettingsScreen({
           )}
         </div>
 
+        <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: '#F8F5F8' }}>Sonido y vibración mientras Atent está abierta</strong>
+          <button type="button" role="switch" aria-checked={soundEnabled} onClick={() => void handleSoundToggle()} style={{ width: '100%', minHeight: 44, marginTop: 8, padding: 11, backgroundColor: soundEnabled ? '#2A1820' : '#09080D', color: soundEnabled ? '#FF83B9' : '#DDD6E3', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, textAlign: 'left' }}>
+            Sonido de alerta en la app: {soundEnabled ? 'Activado' : 'Desactivado'}
+          </button>
+          <button type="button" disabled={!isEmergencyVibrationSupported()} role="switch" aria-checked={vibrationEnabled && isEmergencyVibrationSupported()} onClick={handleVibrationToggle} style={{ width: '100%', minHeight: 44, marginTop: 8, padding: 11, backgroundColor: '#09080D', color: isEmergencyVibrationSupported() ? '#DDD6E3' : '#827B88', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, textAlign: 'left', opacity: isEmergencyVibrationSupported() ? 1 : 0.72 }}>
+            Vibración: {isEmergencyVibrationSupported() ? (vibrationEnabled ? 'Activada' : 'Desactivada') : 'La controla iOS'}
+          </button>
+          {!isEmergencyVibrationSupported() && <p style={{ margin: '7px 0 0', color: '#AAA4B0' }}>Safari no expone vibración a la PWA. iOS aplica sus ajustes de sonido y respuesta háptica a las notificaciones.</p>}
+          {soundEnabled && <button type="button" onClick={() => void playEmergencySound(true)} style={{ width: '100%', minHeight: 40, marginTop: 8, padding: 9, backgroundColor: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700 }}>Probar sonido en esta app</button>}
+        </div>
+
         {isIos ? (
-          <div style={{ padding: 14, backgroundColor: '#1E1925', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.55 }}>
-            <strong style={{ color: '#F8F5F8' }}>Enfoque y No molestar en iOS</strong>
-            <p style={{ margin: '6px 0 0' }}>En Ajustes → Notificaciones → Atent, permite notificaciones y sonidos. En Ajustes → Enfoque, añade Atent a las apps permitidas para cada modo si deseas recibir avisos durante ese Enfoque. iOS puede silenciar o retrasar notificaciones según tus ajustes, conexión y estado del dispositivo. La PWA no puede activar No molestar ni usar las Critical Alerts de apps nativas.</p>
+          <div style={{ marginBottom: 10 }}>
+            <button type="button" onClick={() => setFocusGuideOpen((open) => !open)} style={{ minHeight: 42, padding: '8px 10px', background: 'transparent', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontSize: 12, fontWeight: 700 }}>
+              {focusGuideOpen ? 'Ocultar pasos de Enfoque' : 'Cómo permitir Atent en Enfoque'}
+            </button>
+            {focusGuideOpen && <p style={{ margin: '8px 2px', color: '#AAA4B0', fontSize: 12, lineHeight: 1.5 }}>Abre Ajustes del iPhone → Enfoque → elige un modo → Apps → Añadir apps → Atent. iOS no permite que una PWA abra esta pantalla ni se agregue por sí sola.</p>}
           </div>
         ) : (
           <div style={{ padding: 14, backgroundColor: '#2A1820', border: '1px solid #FF304F', borderRadius: 12, display: 'flex', gap: 12 }}>
@@ -324,14 +353,14 @@ export function SettingsScreen({
           </div>
         )}
 
-        <button
+        {window.AndroidBridge?.getAppVersion && <button
           type="button"
           onClick={onCheckForUpdates}
           disabled={isCheckingUpdates}
           style={{ width: '100%', padding: '12px 14px', marginBottom: '10px', backgroundColor: updateVersion ? '#2A1820' : '#151219', color: updateVersion ? '#FF83B9' : '#F8F5F8', border: `1px solid ${updateVersion ? '#FF304F' : '#382F45'}`, borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: isCheckingUpdates ? 'wait' : 'pointer', opacity: isCheckingUpdates ? 0.7 : 1 }}
         >
           {isCheckingUpdates ? 'Buscando actualizaciones…' : updateVersion ? `Buscar / actualizar a Atent ${updateVersion}` : 'Buscar actualizaciones'}
-        </button>
+        </button>}
 
         {window.AndroidBridge?.openAppSettings && (
           <button

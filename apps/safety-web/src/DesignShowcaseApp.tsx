@@ -16,11 +16,22 @@ import { ContactsScreen, TrustedContact, ContactRequest } from './components/Con
 import { SosDragCancelButton } from './components/SosDragCancelButton';
 import { supabase } from './supabaseClient';
 import { AvailableUpdate, checkForLatestUpdate } from './update-checker';
-import { getClientPlatform } from './pwa';
+import { disableWebPush, getClientPlatform, playEmergencySound, vibrateForEmergency } from './pwa';
 
 export function DesignShowcaseApp() {
   const tokens = ATENT_TOKENS;
   const isIosClient = getClientPlatform().startsWith('ios-');
+  const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerHeight < 760);
+
+  useEffect(() => {
+    const updateViewport = () => setIsCompactViewport((window.visualViewport?.height ?? window.innerHeight) < 760);
+    window.addEventListener('resize', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
+    };
+  }, []);
 
   // Local storage keys
   const STORAGE_KEY_AUTH = 'atent_auth_user_v2';
@@ -362,14 +373,15 @@ export function DesignShowcaseApp() {
     const newActiveAlert = nextAlerts.find((alert: EmergencyAlertItem) =>
       alert.status === 'active' && !notifiedAlertIdsRef.current.has(alert.id)
     );
-    if (newActiveAlert && currentScreen !== 'alerts') {
+    if (newActiveAlert && (isIosClient || currentScreen !== 'alerts')) {
       notifiedAlertIdsRef.current.add(newActiveAlert.id);
       window.AndroidBridge?.showIncomingEmergencyAlert?.(newActiveAlert.owner_name);
       if (isIosClient && document.visibilityState === 'visible') {
         setCharacterMood('ENOJADO');
         setCharacterSpeech(`${newActiveAlert.owner_name} activó una alerta`);
         showToast(`🚨 ${newActiveAlert.owner_name} necesita tu atención`);
-        if ('vibrate' in navigator) navigator.vibrate?.([250, 120, 250]);
+        void playEmergencySound();
+        vibrateForEmergency();
       }
     }
     if (isIosClient) {
@@ -964,6 +976,10 @@ export function DesignShowcaseApp() {
       confirmText: 'Cerrar sesión',
       onConfirm: async () => {
         try {
+          if (currentUser?.web_session_token) {
+            await disableWebPush(currentUser.web_session_token).catch(() => undefined);
+            await supabase.rpc('revoke_pwa_session', { p_session_token: currentUser.web_session_token });
+          }
           await supabase.auth.signOut();
         } catch {
           // ignore
@@ -988,7 +1004,10 @@ export function DesignShowcaseApp() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100dvh',
+        height: '100dvh',
+        minHeight: 0,
+        width: '100%',
+        overflow: 'hidden',
         backgroundColor: '#09080D',
         color: '#F8F5F8',
         fontFamily: tokens.typography.fontFamily.base,
@@ -1001,7 +1020,11 @@ export function DesignShowcaseApp() {
         style={{
           width: '100%',
           maxWidth: '430px',
-          minHeight: '100dvh',
+          height: '100%',
+          minHeight: 0,
+          flex: 1,
+          boxSizing: 'border-box',
+          paddingTop: 'env(safe-area-inset-top)',
           backgroundColor: '#09080D',
           display: 'flex',
           flexDirection: 'column',
@@ -1239,7 +1262,7 @@ export function DesignShowcaseApp() {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                padding: '24px 20px 16px 20px',
+                padding: isCompactViewport ? '10px 16px 6px' : '24px 20px 16px',
               }}
             >
               {/* Encabezado */}
@@ -1273,7 +1296,7 @@ export function DesignShowcaseApp() {
 
               {/* Personaje y Mensaje */}
               <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px' }}>
-                <FullBodyCharacter mood={characterMood} height={145} speechText={characterSpeech} />
+                <FullBodyCharacter mood={characterMood} height={isCompactViewport ? 104 : 145} speechText={characterSpeech} />
               </div>
 
               {/* REQUISITO 1: SOS INMEDIATO + GESTO DE ARRASTRE TÁCTIL AL CÍRCULO SECUNDARIO SUPERIOR DERECHO */}
@@ -1284,11 +1307,12 @@ export function DesignShowcaseApp() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
-                  margin: '8px 0',
+                  margin: isCompactViewport ? '0' : '8px 0',
                 }}
               >
                 <SosDragCancelButton
                   isSosActive={isSosActive}
+                  compact={isIosClient && isCompactViewport}
                   onEmergencyTriggered={handleEmergencyTriggered}
                   onCancelActiveEmergency={handlePerformCancelEmergency}
                   onGestureStateChange={(gState) => {
@@ -1445,7 +1469,8 @@ export function DesignShowcaseApp() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-around',
-              padding: '0 4px',
+              padding: '0 4px env(safe-area-inset-bottom)',
+              boxSizing: 'border-box',
               zIndex: 10,
             }}
           >
