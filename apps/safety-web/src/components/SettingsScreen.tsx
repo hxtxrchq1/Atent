@@ -424,7 +424,7 @@ export function SettingsScreen({
 
       <div style={{ textAlign: 'center', paddingBottom: '8px' }}>
         <span style={{ fontSize: '11px', color: '#706877' }}>
-          Atent V1 · v1.9
+          Atent V1 · v2.0
         </span>
       </div>
 
