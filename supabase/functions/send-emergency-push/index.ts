@@ -264,7 +264,7 @@ Deno.serve(async (request) => {
       if (iosRecipientIds.length > 0) {
         const { error: scheduleError } = await supabase.from('ios_web_push_reminders').upsert(
           iosRecipientIds.map((recipient_user_id) => ({
-            alert_id: String(record.id), recipient_user_id, next_attempt_at: new Date(Date.now() + 10_000).toISOString(),
+            alert_id: String(record.id), recipient_user_id, next_attempt_at: new Date(Date.now() + 2_000).toISOString(),
           })),
           { onConflict: 'alert_id,recipient_user_id', ignoreDuplicates: true },
         );
