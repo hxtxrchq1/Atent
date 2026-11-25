@@ -1,7 +1,7 @@
 {
   "version": "2.0",
   "title": "Atent 2.0",
-  "notes": "Se limpiaron los ajustes Android para ocultar instrucciones exclusivas de iPhone y web push.",
+  "notes": "Las solicitudes de contacto muestran el nombre y teléfono del remitente; al eliminar un contacto se quita la relación en ambos lados.",
   "releaseUrl": "https://github.com/hxtxrchq1/Atent/releases/tag/v2.0",
   "downloadUrl": "https://github.com/hxtxrchq1/Atent/releases/download/v2.0/Atent-v2.0-debug.apk"
 }

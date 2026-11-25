@@ -37,6 +37,7 @@ interface ContactsScreenProps {
   contacts: TrustedContact[];
   activeDirectAlerts: ActiveDirectAlert[];
   receivedRequests: ContactRequest[];
+  requestIdentityUnavailable: boolean;
   sentRequests: ContactRequest[];
   currentUserId: string;
   onSendRequest: (phoneNormalized: string, name: string) => Promise<{ success: boolean; message: string }>;
@@ -56,6 +57,7 @@ export function ContactsScreen({
   contacts,
   activeDirectAlerts,
   receivedRequests,
+  requestIdentityUnavailable,
   sentRequests,
   currentUserId,
   onSendRequest,
@@ -359,7 +361,11 @@ export function ContactsScreen({
               SOLICITUDES RECIBIDAS ({pendingReceived.length})
             </div>
 
-            {pendingReceived.length === 0 ? (
+            {requestIdentityUnavailable ? (
+              <div style={{ padding: '16px', backgroundColor: '#2A1820', borderRadius: '14px', border: '1px solid #FF304F', textAlign: 'center', fontSize: '12px', color: '#DDD6E3', lineHeight: 1.5 }}>
+                No se pueden verificar las solicitudes con esta sesión. Cierra sesión y vuelve a entrar para ver el nombre y teléfono del remitente.
+              </div>
+            ) : pendingReceived.length === 0 ? (
               <div style={{ padding: '16px', backgroundColor: '#1E1925', borderRadius: '14px', border: '1px solid #282133', textAlign: 'center', fontSize: '12px', color: '#AAA4B0' }}>
                 No tienes solicitudes pendientes de respuesta.
               </div>

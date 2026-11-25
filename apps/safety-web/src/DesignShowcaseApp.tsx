@@ -100,6 +100,7 @@ export function DesignShowcaseApp() {
   const [contacts, setContacts] = useState<TrustedContact[]>([]);
   const [outgoingContactInvite, setOutgoingContactInvite] = useState<{ name: string; phone: string } | null>(null);
   const [receivedRequests, setReceivedRequests] = useState<ContactRequest[]>([]);
+  const [requestIdentityUnavailable, setRequestIdentityUnavailable] = useState(false);
   const [sentRequests, setSentRequests] = useState<ContactRequest[]>([]);
   const [activeDirectAlerts, setActiveDirectAlerts] = useState<{ recipientUserId: string; alertId: string; expiresAt: string }[]>([]);
   const [pickedContact, setPickedContact] = useState<{ name: string; phone: string } | null>(null);
@@ -374,24 +375,29 @@ export function DesignShowcaseApp() {
       }
 
       // 2. Solicitudes recibidas pendientes
-      const { data: recData } = await supabase
-        .from('trusted_contact_requests')
-        .select('*, sender:sender_user_id(display_name, phone_normalized, avatar_url)')
-        .eq('recipient_user_id', currentUser.id);
-
-      if (recData) {
-        setReceivedRequests(
-          recData.map((r: any) => ({
-            id: r.id,
+      if (!currentUser.web_session_token) {
+        setReceivedRequests([]);
+        setRequestIdentityUnavailable(true);
+      } else {
+        const { data: recData, error: receivedRequestsError } = await supabase.rpc('get_received_contact_requests_session', {
+          p_session_token: currentUser.web_session_token,
+        });
+        if (receivedRequestsError || !recData) {
+          setReceivedRequests([]);
+          setRequestIdentityUnavailable(true);
+        } else {
+          setRequestIdentityUnavailable(false);
+          setReceivedRequests(recData.map((r: any) => ({
+            id: r.request_id,
             sender_user_id: r.sender_user_id,
             recipient_user_id: r.recipient_user_id,
-            sender_name: r.sender?.display_name || 'Usuario Atent',
-            sender_phone: r.sender?.phone_normalized || '',
-            sender_avatar: r.sender?.avatar_url || 'FELIZ',
+            sender_name: r.sender_name,
+            sender_phone: r.sender_phone,
+            sender_avatar: r.sender_avatar || 'FELIZ',
             status: r.status,
             created_at: r.created_at,
-          }))
-        );
+          })));
+        }
       }
 
       // 3. Solicitudes enviadas
@@ -1074,20 +1080,32 @@ export function DesignShowcaseApp() {
   };
 
   const handleDeleteContact = async (contactId: string) => {
+    const contact = contacts.find((item) => item.id === contactId);
+    if (!contact) return;
     setConfirmModal({
       isOpen: true,
       title: 'Eliminar contacto de auxilio',
-      description: '¿Deseas revocar la relación de confianza? Ya no compartirán alertas de auxilio.',
+      description: 'Se eliminará la relación de confianza de ambos lados. Ya no compartirán alertas de auxilio.',
       confirmText: 'Eliminar',
       onConfirm: async () => {
         window.AndroidBridge?.stopTrustedAlertReceiver?.();
         try {
-          await supabase.from('trusted_contacts').delete().eq('id', contactId);
+          if (!currentUser?.web_session_token) throw new Error('SESSION_EXPIRED');
+          const { data: removedRows, error } = await supabase.rpc('remove_trusted_contact_session', {
+            p_session_token: currentUser.web_session_token,
+            p_contact_user_id: contact.trusted_user_id,
+          });
+          if (error) throw error;
+          if (!removedRows) throw new Error('CONTACT_NOT_FOUND');
           setContacts((prev) => prev.filter((c) => c.id !== contactId));
           setConfirmModal(null);
-          showToast('Contacto eliminado.');
-        } catch {
+          void loadContactsAndRequests();
+          showToast('Contacto eliminado de ambas redes de confianza.');
+        } catch (error: any) {
           setConfirmModal(null);
+          showToast(String(error?.message || '').includes('SESSION_EXPIRED') || String(error?.message || '').includes('PWA_SESSION_INVALID')
+            ? 'Tu sesión de Atent venció. Vuelve a iniciar sesión e inténtalo nuevamente.'
+            : 'No se pudo eliminar el contacto. Comprueba tu conexión e inténtalo nuevamente.');
         }
       },
     });
@@ -1529,6 +1547,7 @@ export function DesignShowcaseApp() {
             <ContactsScreen
               contacts={contacts}
               receivedRequests={receivedRequests}
+              requestIdentityUnavailable={requestIdentityUnavailable}
               sentRequests={sentRequests}
               currentUserId={currentUser?.id || ''}
               onSendRequest={handleSendContactRequest}
