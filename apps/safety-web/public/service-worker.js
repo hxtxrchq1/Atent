@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atent-shell-v5';
+const CACHE_NAME = 'atent-shell-v6';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/sounds/alert_sound.mp3'];
 
 self.addEventListener('install', (event) => {

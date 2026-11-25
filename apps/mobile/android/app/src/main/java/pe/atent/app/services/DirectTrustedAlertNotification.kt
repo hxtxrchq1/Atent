@@ -7,15 +7,15 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.os.Build
-import android.provider.Settings
 import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import pe.atent.app.MainActivity
+import pe.atent.app.R
 
 /** Short-lived, single-recipient notification; it does not start the SOS alarm service. */
 object DirectTrustedAlertNotification {
-    private const val CHANNEL_ID = "atent_direct_trusted_alerts"
+    private const val CHANNEL_ID = "atent_direct_trusted_alerts_v2"
 
     private const val PREFS = "trusted_alert_receiver"
     private const val SHOWN_ALERT_IDS = "shown_direct_alert_ids"
@@ -42,7 +42,7 @@ object DirectTrustedAlertNotification {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                val sound = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
+                val sound = Uri.parse("android.resource://${context.packageName}/${R.raw.alert_sound}")
                 val audioAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

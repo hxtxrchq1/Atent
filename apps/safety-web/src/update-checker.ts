@@ -1,5 +1,5 @@
 // Prefer the lightweight raw manifest (no GitHub API rate limit). Fall back to Releases API.
-export const CURRENT_APP_VERSION = '1.9.6';
+export const CURRENT_APP_VERSION = '1.9.8';
 export const LATEST_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/hxtxrchq1/Atent/main/update.json';
 export const LATEST_RELEASE_URL = 'https://api.github.com/repos/hxtxrchq1/Atent/releases?per_page=20';
 export interface AvailableUpdate {
