@@ -254,6 +254,10 @@ export function DesignShowcaseApp() {
 
   const openUpdateDownload = () => {
     if (!availableUpdate) return;
+    if (window.AndroidBridge?.downloadApk) {
+      window.AndroidBridge.downloadApk(availableUpdate.downloadUrl);
+      return;
+    }
     if (window.AndroidBridge?.openExternalUrl) window.AndroidBridge.openExternalUrl(availableUpdate.downloadUrl);
     else window.open(availableUpdate.downloadUrl, '_blank', 'noopener,noreferrer');
   };

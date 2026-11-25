@@ -12,5 +12,6 @@ El bucket solo debe contener artefactos públicos de distribución. No se deben 
 2. Actualizar `CURRENT_APP_VERSION` y `update.json`.
 3. Compilar `assembleDebug` con GitHub Actions.
 4. Adjuntar el APK a una GitHub Release con el nombre indicado en `update.json`.
+5. En Android, el botón nativo usa DownloadManager y muestra una notificación al terminar; el usuario confirma la instalación desde Android.
 
 Android seguirá exigiendo confirmación manual y permiso para instalar desde esa fuente; no existe instalación silenciosa para este APK.

@@ -51,6 +51,7 @@ declare global {
       checkPermissionsStatus: () => string;
       openAppSettings: () => void;
       openExternalUrl?: (url: string) => void;
+      downloadApk?: (url: string) => void;
       getRealLocation: (requestId?: string) => void;
       isGpsEnabled: () => boolean;
       startEmergencyForegroundService: () => void;

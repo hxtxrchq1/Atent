@@ -2,6 +2,7 @@ package pe.atent.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
@@ -13,6 +14,7 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.view.View
@@ -23,6 +25,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -375,13 +378,53 @@ class MainActivity : AppCompatActivity() {
             val uri = try { Uri.parse(url) } catch (_: Exception) { return }
             val isGithubRelease = uri.scheme == "https" &&
                 uri.host == "github.com" &&
-                uri.path?.startsWith("/hxtxrchq/Atent/releases/") == true
+                uri.path?.startsWith("/hxtxrchq1/Atent/releases/") == true
             val isSupabaseRelease = uri.scheme == "https" &&
                 uri.host == "gxkpiqmuhvpsbmooieod.supabase.co" &&
                 uri.path == "/storage/v1/object/public/app-releases/AtentV1.apk"
             if (!isGithubRelease && !isSupabaseRelease) return
             runOnUiThread {
                 startActivity(Intent(Intent.ACTION_VIEW, uri))
+            }
+        }
+
+        @JavascriptInterface
+        fun downloadApk(url: String) {
+            val uri = try { Uri.parse(url) } catch (_: Exception) { return }
+            val fileName = uri.lastPathSegment?.takeIf {
+                Regex("Atent-v\\d+\\.\\d+\\.\\d+-debug\\.apk", RegexOption.IGNORE_CASE).matches(it)
+            }
+            val isAllowedRelease = uri.scheme == "https" &&
+                uri.host == "github.com" &&
+                uri.path?.startsWith("/hxtxrchq1/Atent/releases/download/") == true &&
+                uri.query.isNullOrEmpty() && fileName != null
+            if (!isAllowedRelease || fileName == null) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "El enlace de descarga de Atent no es válido.", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+
+            runOnUiThread {
+                try {
+                    val request = DownloadManager.Request(uri)
+                        .setTitle("Actualizando Atent")
+                        .setDescription("Descargando $fileName")
+                        .setMimeType("application/vnd.android.package-archive")
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setAllowedOverMetered(true)
+                        .setAllowedOverRoaming(false)
+                        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                    manager.enqueue(request)
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Descarga iniciada. Toca el aviso al terminar para instalar la actualización.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } catch (_: Exception) {
+                    Toast.makeText(this@MainActivity, "No se pudo iniciar la descarga. Inténtalo de nuevo.", Toast.LENGTH_LONG).show()
+                }
             }
         }
 
