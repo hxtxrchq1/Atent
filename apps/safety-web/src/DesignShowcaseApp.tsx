@@ -49,6 +49,11 @@ export function DesignShowcaseApp() {
     return onboarded && securitySetup ? 'home' : 'onboarding';
   });
   const [onboardingStep, setOnboardingStep] = useState<'permissions' | 'tutorial'>('permissions');
+  useEffect(() => {
+    if (isIosClient && currentUser?.id && currentScreen === 'onboarding') {
+      setOnboardingStep('tutorial');
+    }
+  }, [currentUser?.id, currentScreen, isIosClient]);
 
   const [activeTab, setActiveTab] = useState<'home' | 'location' | 'contacts' | 'alerts' | 'settings'>('home');
 
@@ -73,6 +78,7 @@ export function DesignShowcaseApp() {
 
   // RED DE CONTACTOS Y SOLICITUDES MUTUAS (Requisito 7)
   const [contacts, setContacts] = useState<TrustedContact[]>([]);
+  const [outgoingContactInvite, setOutgoingContactInvite] = useState<{ name: string; phone: string } | null>(null);
   const [receivedRequests, setReceivedRequests] = useState<ContactRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<ContactRequest[]>([]);
   const [activeDirectAlerts, setActiveDirectAlerts] = useState<{ recipientUserId: string; alertId: string; expiresAt: string }[]>([]);
@@ -283,6 +289,10 @@ export function DesignShowcaseApp() {
         );
       }
 
+      if (!directAlertRows && directAlertError) {
+        showToast(`No se pudieron cargar tus alertas: ${directAlertError.message}`);
+      }
+
       // 2. Solicitudes recibidas pendientes
       const { data: recData } = await supabase
         .from('trusted_contact_requests')
@@ -355,6 +365,17 @@ export function DesignShowcaseApp() {
     if (newActiveAlert && currentScreen !== 'alerts') {
       notifiedAlertIdsRef.current.add(newActiveAlert.id);
       window.AndroidBridge?.showIncomingEmergencyAlert?.(newActiveAlert.owner_name);
+      if (isIosClient && document.visibilityState === 'visible') {
+        setCharacterMood('ENOJADO');
+        setCharacterSpeech(`${newActiveAlert.owner_name} activó una alerta`);
+        showToast(`🚨 ${newActiveAlert.owner_name} necesita tu atención`);
+        if ('vibrate' in navigator) navigator.vibrate?.([250, 120, 250]);
+      }
+    }
+    if (isIosClient) {
+      for (const alert of nextAlerts) {
+        if (alert.status !== 'active') notifiedAlertIdsRef.current.add(alert.id);
+      }
     }
   };
 
@@ -831,7 +852,7 @@ export function DesignShowcaseApp() {
       });
 
       if (lookupError) {
-        return { success: false, message: 'No se pudo validar el número. Inténtalo de nuevo.' };
+        return { success: false, message: `No se pudo validar el número: ${lookupError.message}` };
       }
 
       // PostgREST serializa RETURNS TABLE como un arreglo, incluso cuando la
@@ -840,6 +861,13 @@ export function DesignShowcaseApp() {
       const recipient = Array.isArray(recipientProfile) ? recipientProfile[0] : recipientProfile;
 
       if (!recipient?.id) {
+        if (/^\+\d{8,15}$/.test(phoneNormalized)) {
+          setOutgoingContactInvite({ name, phone: phoneNormalized });
+          return {
+            success: true,
+            message: `No encontramos una cuenta Atent con ${phoneNormalized}. Puedes compartirle la invitación por SMS.`,
+          };
+        }
         return {
           success: false,
           message: 'El número aún no tiene una cuenta de Atent. Comparte la app para que se registre.',
@@ -867,6 +895,13 @@ export function DesignShowcaseApp() {
     } catch (err: any) {
       return { success: false, message: err.message || 'Error de conexión.' };
     }
+  };
+
+  const shareContactInviteBySms = () => {
+    if (!outgoingContactInvite) return;
+    const message = `Hola ${outgoingContactInvite.name}, te invito a unirte a Atent para formar parte de mi red de confianza. Descarga la app y regístrate con ${outgoingContactInvite.phone}. https://atent.chiqo.cc.cd`;
+    window.location.href = `sms:${outgoingContactInvite.phone}?&body=${encodeURIComponent(message)}`;
+    setOutgoingContactInvite(null);
   };
 
   const handleAcceptContactRequest = async (requestId: string) => {
@@ -1038,6 +1073,7 @@ export function DesignShowcaseApp() {
                 } else {
                   const onboarded = localStorage.getItem(STORAGE_KEY_ONBOARDED) === 'true';
                   const securitySetup = localStorage.getItem(STORAGE_KEY_SECURITY_SETUP) === 'true';
+                  if (isIosClient) setOnboardingStep('tutorial');
                   setCurrentScreen(onboarded && securitySetup ? 'home' : 'onboarding');
                 }
                 showToast(`Bienvenido, ${userProfile.display_name || userProfile.legal_name}`);
@@ -1056,6 +1092,7 @@ export function DesignShowcaseApp() {
                 setCurrentUser(updated);
                 localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(updated));
                 setCharacterMood(selectedAvatar);
+                if (isIosClient) setOnboardingStep('tutorial');
                 setCurrentScreen('onboarding');
               }}
             />
@@ -1082,10 +1119,15 @@ export function DesignShowcaseApp() {
                   Permisos de Seguridad
                 </h1>
                 <p style={{ color: '#AAA4B0', fontSize: '13px', textAlign: 'center', margin: '0 0 24px 0', lineHeight: 1.45 }}>
-                  Atent requiere estos accesos nativos en tu teléfono Android para actuar de inmediato:
+                  {isIosClient ? 'Configura Atent para usarla en tu iPhone. iOS solicitará cada permiso cuando la función lo necesite:' : 'Atent requiere estos accesos nativos en tu teléfono Android para actuar de inmediato:'}
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {isIosClient && (
+                    <div style={{ padding: 14, backgroundColor: '#151219', border: '1px solid #F52D83', borderRadius: 14, fontSize: 12, color: '#DDD6E3', lineHeight: 1.5 }}>
+                      Para configurar Push: primero añade Atent a la pantalla de inicio desde Safari; abre el icono instalado, entra a Ajustes y activa Notificaciones. La alerta con sonido requiere autorización en iOS y puede verse afectada por modo silencio o Enfoque.
+                    </div>
+                  )}
                   <div style={{ padding: '14px', backgroundColor: '#1E1925', borderRadius: '16px', border: '1px solid #2B2436', display: 'flex', gap: '12px' }}>
                     <VectorIcon name="map-pin" size={20} color="#FF83B9" />
                     <div style={{ flex: 1 }}>
@@ -1099,9 +1141,9 @@ export function DesignShowcaseApp() {
                   <div style={{ padding: '14px', backgroundColor: '#1E1925', borderRadius: '16px', border: '1px solid #2B2436', display: 'flex', gap: '12px' }}>
                     <VectorIcon name="users" size={20} color="#FF83B9" />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px' }}>Agenda de contactos</div>
+                      <div style={{ fontWeight: 700, fontSize: '13px' }}>{isIosClient ? 'Red de confianza' : 'Agenda de contactos'}</div>
                       <div style={{ color: '#AAA4B0', fontSize: '12px', marginTop: '2px' }}>
-                        Importa personas de confianza con el selector nativo de tu teléfono.
+                        {isIosClient ? 'Agrega personas manualmente con su número de Atent; el selector de agenda pertenece a Android.' : 'Importa personas de confianza con el selector nativo de tu teléfono.'}
                       </div>
                     </div>
                   </div>
@@ -1111,7 +1153,7 @@ export function DesignShowcaseApp() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: '13px' }}>{isIosClient ? 'Notificaciones y modo Enfoque' : 'Alertas durante No molestar'}</div>
                       <div style={{ color: '#DDD6E3', fontSize: '12px', marginTop: '2px' }}>
-                        {isIosClient ? 'En Ajustes → Notificaciones permite los sonidos; en cada modo Enfoque agrega Atent a las apps permitidas. La PWA no admite Critical Alerts.' : 'Android abrirá sus ajustes para que concedas manualmente este acceso especial.'}
+                        {isIosClient ? 'Instala Atent en pantalla de inicio y activa Push desde Ajustes. iOS puede silenciar sonidos según Enfoque o modo silencio; la PWA no admite Critical Alerts.' : 'Android abrirá sus ajustes para que concedas manualmente este acceso especial.'}
                       </div>
                     </div>
                   </div>
@@ -1122,6 +1164,10 @@ export function DesignShowcaseApp() {
                 <button
                   id="btn-onboarding-grant-permissions"
                   onClick={() => {
+                    if (isIosClient) {
+                      setOnboardingStep('tutorial');
+                      return;
+                    }
                     if (window.AndroidBridge?.requestAppPermissions) {
                       window.AndroidBridge.requestAppPermissions();
                     }
@@ -1141,7 +1187,7 @@ export function DesignShowcaseApp() {
                     boxShadow: '0 0 28px rgba(245, 45, 131, 0.45)',
                   }}
                 >
-                  Conceder permisos y continuar
+                  {isIosClient ? 'Continuar' : 'Conceder permisos y continuar'}
                 </button>
               </div>
                 </>
@@ -1343,6 +1389,7 @@ export function DesignShowcaseApp() {
               onNotifyContact={handleNotifyContact}
               activeDirectAlerts={activeDirectAlerts}
               onStopNotifyContact={handleStopNotifyContact}
+              canUseNativePicker={Boolean(window.AndroidBridge?.pickPhoneContact)}
               onOpenNativePicker={() => {
                 if (window.AndroidBridge?.pickPhoneContact) {
                   window.AndroidBridge.pickPhoneContact();
@@ -1391,7 +1438,7 @@ export function DesignShowcaseApp() {
         {!isAuthFlow && (
           <nav
             style={{
-              height: 'calc(62px + env(safe-area-inset-bottom))',
+              minHeight: 'calc(62px + env(safe-area-inset-bottom))',
               paddingBottom: 'env(safe-area-inset-bottom)',
               backgroundColor: '#09080D',
               borderTop: '1px solid #201A29',
@@ -1446,6 +1493,19 @@ export function DesignShowcaseApp() {
           alert={selectedAlertForDetail}
           onClose={() => setSelectedAlertForDetail(null)}
         />
+
+        {outgoingContactInvite && (
+          <div role="dialog" aria-modal="true" aria-labelledby="contact-invite-title" style={{ position: 'fixed', inset: 0, zIndex: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', paddingTop: 'calc(20px + env(safe-area-inset-top))', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', backgroundColor: 'rgba(9, 8, 13, 0.88)' }}>
+            <div style={{ width: '100%', maxWidth: 380, padding: 22, borderRadius: 20, border: '1px solid #382F45', backgroundColor: '#1E1925', color: '#F8F5F8' }}>
+              <h2 id="contact-invite-title" style={{ margin: '0 0 10px', fontSize: 19 }}>Invita a {outgoingContactInvite.name}</h2>
+              <p style={{ margin: '0 0 16px', color: '#CCC4D0', fontSize: 14, lineHeight: 1.5 }}>Ese número todavía no tiene una cuenta Atent. Debe registrarse primero para poder aceptar tu solicitud y recibir alertas.</p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" onClick={() => setOutgoingContactInvite(null)} style={{ flex: 1, minHeight: 46, padding: 12, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontWeight: 700 }}>Cerrar</button>
+                <button type="button" onClick={shareContactInviteBySms} style={{ flex: 1, minHeight: 46, padding: 12, backgroundColor: '#F52D83', color: '#FFF', border: 0, borderRadius: 12, fontWeight: 800 }}>Invitar por SMS</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showUpdateModal && availableUpdate && (
           <div role="dialog" aria-modal="true" aria-labelledby="atent-update-title" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(9, 8, 13, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', zIndex: 360 }}>

@@ -36,7 +36,8 @@ export async function enableWebPush(userId: string, password: string): Promise<v
   if (permission !== 'granted') throw new Error('No se concedió permiso para las notificaciones. Puedes cambiarlo en Ajustes del dispositivo.');
 
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
+  const existingSubscription = await registration.pushManager.getSubscription();
+  const subscription = existingSubscription ?? await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: decodeBase64Url(import.meta.env.VITE_VAPID_PUBLIC_KEY),
   });
@@ -48,10 +49,32 @@ export async function enableWebPush(userId: string, password: string): Promise<v
     p_platform: getClientPlatform(),
   });
   if (error) {
-    await subscription.unsubscribe().catch(() => false);
-    throw new Error('No fue posible registrar las notificaciones en tu cuenta. Inténtalo de nuevo más tarde.');
+    if (!existingSubscription) await subscription.unsubscribe().catch(() => false);
+    throw new Error(`No fue posible registrar las notificaciones en tu cuenta: ${error.message}`);
   }
   localStorage.setItem(`atent_web_push_enabled_${userId}`, 'true');
+}
+
+export async function getWebPushSubscriptionState(): Promise<'enabled' | 'not-enabled' | 'unsupported'> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    return await registration?.pushManager.getSubscription() ? 'enabled' : 'not-enabled';
+  } catch {
+    return 'not-enabled';
+  }
+}
+
+export async function sendWebPushTest(userId: string, password: string): Promise<void> {
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) throw new Error('Este iPhone todavía no tiene una suscripción Push activa.');
+  const { error } = await supabase.rpc('send_web_push_test', {
+    p_user_id: userId,
+    p_password: password,
+    p_endpoint: subscription.endpoint,
+  });
+  if (error) throw new Error(`No se pudo enviar la notificación de prueba: ${error.message}`);
 }
 
 export async function disableWebPush(userId: string, password: string): Promise<void> {

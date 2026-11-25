@@ -46,6 +46,7 @@ interface ContactsScreenProps {
   onNotifyContact: (contact: TrustedContact) => Promise<{ success: boolean; message: string }>;
   onStopNotifyContact: (contact: TrustedContact, alertId: string) => Promise<{ success: boolean; message: string }>;
   onOpenNativePicker: () => void;
+  canUseNativePicker?: boolean;
   pickedContact?: { name: string; phone: string } | null;
   onPickedContactApplied?: () => void;
   showToast: (msg: string) => void;
@@ -64,6 +65,7 @@ export function ContactsScreen({
   onNotifyContact,
   onStopNotifyContact,
   onOpenNativePicker,
+  canUseNativePicker = true,
   pickedContact,
   onPickedContactApplied,
   showToast,
@@ -104,8 +106,14 @@ export function ContactsScreen({
 
     const normalized = `${selectedCountry.dialCode}${cleanDigits}`;
     setIsSubmitting(true);
-    const result = await onSendRequest(normalized, targetName.trim() || 'Contacto');
-    setIsSubmitting(false);
+    let result: { success: boolean; message: string };
+    try {
+      result = await onSendRequest(normalized, targetName.trim() || 'Contacto');
+    } catch (error) {
+      result = { success: false, message: error instanceof Error ? error.message : 'No se pudo enviar la solicitud. Revisa tu conexión.' };
+    } finally {
+      setIsSubmitting(false);
+    }
 
     showToast(result.message);
     if (result.success) {
@@ -466,7 +474,10 @@ export function ContactsScreen({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '24px',
+            padding: 'calc(16px + env(safe-area-inset-left)) calc(16px + env(safe-area-inset-right))',
+            paddingTop: 'calc(16px + env(safe-area-inset-top))',
+            paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+            overflowY: 'auto',
             zIndex: 250,
           }}
         >
@@ -477,7 +488,9 @@ export function ContactsScreen({
               backgroundColor: '#1E1925',
               borderRadius: '24px',
               border: '1px solid #382F45',
-              padding: '24px',
+              padding: '20px',
+              maxHeight: '100%',
+              overflowY: 'auto',
               boxSizing: 'border-box',
             }}
           >
@@ -565,7 +578,8 @@ export function ContactsScreen({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: canUseNativePicker ? 'row' : 'column', gap: '8px', marginTop: '10px' }}>
+                {canUseNativePicker && (
                 <button
                   type="button"
                   onClick={onOpenNativePicker}
@@ -583,11 +597,12 @@ export function ContactsScreen({
                 >
                   De mi agenda
                 </button>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   style={{
-                    flex: 1,
+                    flex: canUseNativePicker ? 1 : undefined,
                     padding: '12px',
                     backgroundColor: isSubmitting ? '#706877' : '#F52D83',
                     color: '#F8F5F8',

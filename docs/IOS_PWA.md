@@ -34,19 +34,16 @@ La instalación y la recepción de Web Push en iPhone requieren abrir la PWA des
 
 El cliente contiene el flujo de permiso iniciado por botón, suscripción VAPID, alta y revocación por RPC. La app existente autentica con teléfono y contraseña mediante funciones Postgres personalizadas, no con una sesión Supabase Auth; por eso el alta y la revocación vuelven a comprobar la contraseña en Postgres, sin guardarla. `infrastructure/supabase_migration_v5_web_push.sql` añade almacenamiento por usuario sin lecturas directas y RPCs limitadas.
 
-La migración ya se aplicó en el proyecto Supabase `atent-production`. El emisor existente es una Edge Function que despacha FCM al insertar emergencias; debe extenderse para enviar Web Push a las suscripciones activas de los mismos contactos, conservar FCM Android y eliminar endpoints HTTP 404/410. Vercel necesita `VITE_VAPID_PUBLIC_KEY` para compilar; Supabase Edge Functions necesita la privada y el subject. No debe usarse la clave `service_role` en el navegador. El cliente por sí solo no envía alertas.
+Las migraciones de suscripción y permisos ya se aplicaron en el proyecto Supabase `atent-production`. El emisor existente despacha FCM y Web Push a los mismos contactos; Android conserva el envío FCM existente y se eliminan endpoints Web Push 404/410. La versión 7 incluye una ruta de prueba de sonido limitada a la suscripción del usuario que vuelve a autenticarse. Vercel necesita `VITE_VAPID_PUBLIC_KEY` para compilar; Supabase Edge Functions necesita la privada y el subject. No debe usarse la clave `service_role` en el navegador. El cliente por sí solo no envía alertas.
 
-La generación de claves VAPID queda pendiente de comprobar primero los secretos de producción existentes para reutilizar cualquier par vigente. La clave privada nunca va al frontend.
+La clave pública está en la configuración de Vercel y la privada solo en los secretos de Supabase. La clave privada nunca va al frontend.
 
 ## Verificación y pendientes
 
 - Compilar `apps/safety-web` localmente antes de desplegar.
-- Configurar secretos VAPID tras comprobar si ya hay claves válidas.
-- Configurar el endpoint servidor Web Push e integrar su invocación en la fuente de eventos de emergencia compartida con FCM.
-- Vincular Vercel al repositorio/root `apps/safety-web`; definir URL y clave publicable Supabase más VAPID pública para Preview/Production; desplegar.
-- Añadir y validar `atent.chiqo.cc.cd` en Vercel y en su proveedor DNS sin tocar otros registros. Verificar propagación y TLS.
-- Validar instalación, permiso, entrega en segundo plano, pantalla bloqueada, Enfoque y ubicación en un iPhone físico.
-- Confirmar que el APK original y sus recursos no se modifican.
+- Debe activarse Push desde la PWA instalada en un iPhone; hasta que se registre al menos un dispositivo, el backend no tendrá destinatarios Web Push.
+- Validar envío mediante **Ajustes → Probar notificación** y luego comprobar una emergencia real Android↔iOS.
+- Validar entrega, sonido, pantalla bloqueada, Enfoque y ubicación en el iPhone físico; iOS aplica sus propios modos de silencio y no admite Critical Alerts para PWA.
 
 ## Arquitectura de referencia
 

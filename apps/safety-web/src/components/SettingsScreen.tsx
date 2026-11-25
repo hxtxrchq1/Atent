@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CharacterMood, MOOD_IMAGES, VectorIcon } from './AppCommon';
 import { supabase } from '../supabaseClient';
-import { disableWebPush, enableWebPush, getClientPlatform, getPushSupport } from '../pwa';
+import { disableWebPush, enableWebPush, getClientPlatform, getPushSupport, getWebPushSubscriptionState, sendWebPushTest } from '../pwa';
 
 interface SettingsScreenProps {
   currentUser: any;
@@ -37,10 +37,21 @@ export function SettingsScreen({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const pushSupport = getPushSupport();
-  const [pushEnabled, setPushEnabled] = useState(() => Boolean(currentUser?.id && localStorage.getItem(`atent_web_push_enabled_${currentUser.id}`) === 'true'));
+  const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushTestBusy, setPushTestBusy] = useState(false);
   const [pushPassword, setPushPassword] = useState('');
   const isIos = getClientPlatform().startsWith('ios-');
+
+  useEffect(() => {
+    let active = true;
+    void getWebPushSubscriptionState().then((state) => {
+      if (!active) return;
+      setPushEnabled(state === 'enabled');
+      if (currentUser?.id && state === 'enabled') localStorage.setItem(`atent_web_push_enabled_${currentUser.id}`, 'true');
+    });
+    return () => { active = false; };
+  }, [currentUser?.id]);
 
   const handlePushToggle = async () => {
     if (!pushPassword) {
@@ -56,13 +67,32 @@ export function SettingsScreen({
         showToast('Notificaciones desactivadas en este dispositivo.');
       } else {
         await enableWebPush(currentUser.id, pushPassword);
-        setPushEnabled(true);
-        showToast('Notificaciones activadas en este dispositivo.');
+        const state = await getWebPushSubscriptionState();
+        setPushEnabled(state === 'enabled');
+        showToast(state === 'enabled' ? 'Notificaciones activadas y registradas en este dispositivo.' : 'El navegador no confirmó la suscripción Push.');
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No fue posible cambiar las notificaciones.');
     } finally {
       setPushBusy(false);
+      setPushPassword('');
+    }
+  };
+
+  const handlePushTest = async () => {
+    if (!pushPassword) {
+      showToast('Ingresa tu contraseña de Atent para confirmar la prueba.');
+      return;
+    }
+    setPushTestBusy(true);
+    try {
+      await sendWebPushTest(currentUser.id, pushPassword);
+      await getWebPushSubscriptionState().then((state) => setPushEnabled(state === 'enabled'));
+      showToast('Prueba enviada. Bloquea el iPhone durante unos segundos para confirmar el sonido.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo enviar la notificación de prueba.');
+    } finally {
+      setPushTestBusy(false);
       setPushPassword('');
     }
   };
@@ -265,7 +295,7 @@ export function SettingsScreen({
 
         <div style={{ padding: 14, marginBottom: 10, backgroundColor: '#151219', color: '#DDD6E3', border: '1px solid #382F45', borderRadius: 12, fontSize: 12, lineHeight: 1.5 }}>
           <strong style={{ color: '#F8F5F8' }}>Notificaciones de Atent</strong>
-          <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? 'Actívalas para recibir alertas en este dispositivo.' : pushSupport.reason}</p>
+          <p style={{ margin: '6px 0 10px' }}>{pushSupport.supported ? (pushEnabled ? 'Este dispositivo tiene una suscripción Push activa.' : 'Activa el permiso del sistema y registra este dispositivo en tu cuenta.') : pushSupport.reason}</p>
           {pushSupport.supported && (
             <>
               <label style={{ display: 'block', marginBottom: 8 }} htmlFor="push-account-password">Confirma tu contraseña de Atent</label>
@@ -273,6 +303,11 @@ export function SettingsScreen({
               <button type="button" disabled={pushBusy || !pushPassword} onClick={() => void handlePushToggle()} style={{ width: '100%', padding: 11, backgroundColor: pushEnabled ? '#2A1820' : '#F52D83', color: '#F8F5F8', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushBusy || !pushPassword ? 0.7 : 1 }}>
                 {pushBusy ? 'Actualizando…' : pushEnabled ? 'Desactivar notificaciones' : 'Activar notificaciones'}
               </button>
+              {pushEnabled && (
+                <button type="button" disabled={pushTestBusy || !pushPassword} onClick={() => void handlePushTest()} style={{ width: '100%', marginTop: 8, padding: 11, backgroundColor: '#151219', color: '#FF83B9', border: '1px solid #382F45', borderRadius: 10, fontWeight: 700, opacity: pushTestBusy || !pushPassword ? 0.7 : 1 }}>
+                  {pushTestBusy ? 'Enviando prueba…' : 'Probar notificación'}
+                </button>
+              )}
             </>
           )}
         </div>

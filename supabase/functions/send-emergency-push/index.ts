@@ -59,6 +59,40 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   try {
     const payload = await request.json();
+    if (payload.type === 'TEST') {
+      const userId = String(payload.user_id || '');
+      const endpoint = String(payload.endpoint || '');
+      if (!userId || !endpoint) return json({ error: 'Invalid test target' }, 400);
+      const { data: target, error: targetError } = await supabase
+        .from('web_push_subscriptions')
+        .select('id, subscription')
+        .eq('user_id', userId)
+        .eq('endpoint', endpoint)
+        .is('revoked_at', null)
+        .maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return json({ error: 'Push subscription not found' }, 404);
+      const subject = Deno.env.get('VAPID_SUBJECT');
+      const publicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+      const privateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+      if (!subject || !publicKey || !privateKey) throw new Error('VAPID secrets are not configured');
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+      try {
+        await webpush.sendNotification(target.subscription, JSON.stringify({
+          title: 'Atent: prueba de sonido',
+          body: 'Si recibes este aviso, las notificaciones de Atent están activas en este iPhone.',
+          data: { url: '/?push-test=1' },
+        }), { TTL: 60 });
+        return json({ sent: 1 });
+      } catch (error) {
+        const status = Number((error as { statusCode?: number }).statusCode || 0);
+        if (status === 404 || status === 410) {
+          await supabase.from('web_push_subscriptions')
+            .update({ revoked_at: new Date().toISOString() }).eq('id', target.id);
+        }
+        return json({ error: 'WEB_PUSH_TEST_FAILED', status }, status === 404 || status === 410 ? 410 : 502);
+      }
+    }
     const record = payload.record ?? payload;
     if (payload.type && payload.type !== 'INSERT') return json({ ignored: true });
     if (!record.id || !record.owner_user_id || record.status !== 'active') return json({ ignored: true });
