@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atent-shell-v4';
+const CACHE_NAME = 'atent-shell-v5';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/sounds/alert_sound.mp3'];
 
 self.addEventListener('install', (event) => {
@@ -41,18 +41,30 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     silent: false,
-    tag: data.alertId ? `atent-emergency-${data.alertId}` : undefined,
+    tag: data.alertId
+      ? `atent-emergency-${data.alertId}${data.repeat ? `-${data.repeatCount || Date.now()}` : ''}`
+      : undefined,
     renotify: Boolean(data.alertId),
-    data: { url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/') },
+    data: {
+      alertId: data.alertId || null,
+      url: data.url || (data.alertId ? `/?alert=${encodeURIComponent(data.alertId)}` : '/'),
+    },
   };
   event.waitUntil(self.registration.showNotification(payload.title || 'Alerta de Atent', options));
 });
 
 self.addEventListener('notificationclick', (event) => {
+  const alertId = event.notification.data?.alertId;
   event.notification.close();
   const target = new URL(event.notification.data?.url || '/', self.location.origin).href;
-  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+  event.waitUntil((async () => {
+    if (alertId && typeof self.registration.getNotifications === 'function') {
+      const notifications = await self.registration.getNotifications();
+      notifications.filter((notification) => notification.data?.alertId === alertId)
+        .forEach((notification) => notification.close());
+    }
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
     return existing ? existing.navigate(target).then(() => existing.focus()) : self.clients.openWindow(target);
-  }));
+  })());
 });

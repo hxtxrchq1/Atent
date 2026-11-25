@@ -171,6 +171,7 @@ Deno.serve(async (request) => {
             alertId: String(alert.id),
             alertType: alert.recipient_user_id ? 'DIRECT' : 'SOS',
             repeat: true,
+            repeatCount: Number(reminder.repeat_count),
             url: `/?alert=${encodeURIComponent(String(alert.id))}`,
           },
         });
@@ -263,7 +264,7 @@ Deno.serve(async (request) => {
       if (iosRecipientIds.length > 0) {
         const { error: scheduleError } = await supabase.from('ios_web_push_reminders').upsert(
           iosRecipientIds.map((recipient_user_id) => ({
-            alert_id: String(record.id), recipient_user_id, next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
+            alert_id: String(record.id), recipient_user_id, next_attempt_at: new Date(Date.now() + 10_000).toISOString(),
           })),
           { onConflict: 'alert_id,recipient_user_id', ignoreDuplicates: true },
         );
